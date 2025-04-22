@@ -1,0 +1,74 @@
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+// 
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+// 
+// You should have received a copy of the GNU Lesser General Public License
+// along with this program.  If not, see http://www.gnu.org/licenses/.
+// 
+
+#ifndef HELPERS_INCOMPLETEPACKETLIST_H_
+#define HELPERS_INCOMPLETEPACKETLIST_H_
+
+#include <vector>
+#include <cstdint>
+#include <sstream>
+
+#include "inet/common/Units.h"
+
+#include "../LoRaMeshRouter/BroadcastFragment_m.h"
+#include "generalHelpers.h"
+
+namespace rlora {
+
+using namespace omnetpp;
+using namespace std;
+
+struct FragmentedPacket
+{
+    string id = generate_uuid();
+    int messageId = -1;
+    int size = -1;
+    int received = 0;
+    int lastFragment = 0;
+    int sourceNode = -1;
+    int lastHop = -1;
+    bool corrupted = false;
+    bool retransmit = false;
+};
+
+struct Result
+{
+    bool isComplete;
+    bool sendUp;
+    int waitTime;
+    FragmentedPacket completePacket = FragmentedPacket();
+};
+
+class IncompletePacketList
+{
+public:
+    IncompletePacketList();
+    virtual ~IncompletePacketList();
+
+    FragmentedPacket* getById(int messageId);
+
+    void removeById(int messageId);
+    void add(const FragmentedPacket &packet);
+    void removeBySource(int source);
+    Result addToIncompletePacket(const BroadcastFragment *fragment);
+
+private:
+    std::vector<FragmentedPacket> packets_;
+};
+
+} // namespace rlora
+
+#endif // HELPERS_INCOMPLETEPACKETLIST_H_
+
