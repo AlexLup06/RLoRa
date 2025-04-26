@@ -1,5 +1,5 @@
 //
-// Generated file, do not edit! Created by opp_msgtool 6.0 from NewLoRaMac/BroadcastAck.msg.
+// Generated file, do not edit! Created by opp_msgtool 6.0 from LoRaMeshRouter/BroadcastAck.msg.
 //
 
 // Disable warnings about unused variables, empty switch stmts, etc:
@@ -28,7 +28,7 @@
 #include <sstream>
 #include <memory>
 #include <type_traits>
-#include "../LoRaMeshRouter/BroadcastAck_m.h"
+#include "BroadcastAck_m.h"
 
 namespace omnetpp {
 

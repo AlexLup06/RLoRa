@@ -41,6 +41,22 @@ struct FragmentedPacket
     int lastHop = -1;
     bool corrupted = false;
     bool retransmit = false;
+
+    std::string toString() const {
+        std::ostringstream oss;
+        oss << "FragmentedPacket { "
+            << "id: " << id
+            << ", messageId: " << messageId
+            << ", size: " << size
+            << ", received: " << received
+            << ", lastFragment: " << lastFragment
+            << ", sourceNode: " << sourceNode
+            << ", lastHop: " << lastHop
+            << ", corrupted: " << std::boolalpha << corrupted
+            << ", retransmit: " << std::boolalpha << retransmit
+            << " }";
+        return oss.str();
+    }
 };
 
 struct Result

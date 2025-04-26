@@ -61,7 +61,7 @@ bool LoRaReceiver::computeIsReceptionPossible(const IListening *listening, const
     auto *loRaRadio = check_and_cast<LoRaRadio*>(getParentModule());
 //    auto node = getContainingNode(this);
 //    auto loRaRadio = check_and_cast<LoRaRadio *>(node->getSubmodule("LoRaNic")->getSubmodule("LoRaRadio"));
-    if (iAmGateway || (loRaTransmission->getLoRaCF() == loRaRadio->loRaCF && loRaTransmission->getLoRaBW() == loRaRadio->loRaBW && loRaTransmission->getLoRaSF() == loRaRadio->loRaSF))
+    if (loRaTransmission->getLoRaCF() == loRaRadio->loRaCF && loRaTransmission->getLoRaBW() == loRaRadio->loRaBW && loRaTransmission->getLoRaSF() == loRaRadio->loRaSF)
         return true;
     else
         return false;
@@ -72,7 +72,7 @@ bool LoRaReceiver::computeIsReceptionPossible(const IListening *listening, const
     //here we can check compatibility of LoRaTx parameters (or beeing a gateway) and reception above sensitivity level
     const LoRaBandListening *loRaListening = check_and_cast<const LoRaBandListening*>(listening);
     const LoRaReception *loRaReception = check_and_cast<const LoRaReception*>(reception);
-    if (iAmGateway == false && (loRaListening->getLoRaCF() != loRaReception->getLoRaCF() || loRaListening->getLoRaBW() != loRaReception->getLoRaBW() || loRaListening->getLoRaSF() != loRaReception->getLoRaSF())) {
+    if (loRaListening->getLoRaCF() != loRaReception->getLoRaCF() || loRaListening->getLoRaBW() != loRaReception->getLoRaBW() || loRaListening->getLoRaSF() != loRaReception->getLoRaSF()) {
         return false;
     }
     else {
@@ -87,38 +87,11 @@ bool LoRaReceiver::computeIsReceptionPossible(const IListening *listening, const
     }
 }
 
-// TODO: -- FOR ME ALEX -- Implement Collision count corectly. How do we define Collisions?
 bool LoRaReceiver::computeIsReceptionAttempted(const IListening *listening, const IReception *reception, IRadioSignal::SignalPart part, const IInterference *interference) const
 {
     if (isPacketCollided(reception, part, interference)) {
-        auto packet = reception->getTransmission()->getPacket();
-        const auto &chunk = packet->peekAtFront<FieldsChunk>();
-        auto loraMac = dynamicPtrCast<const LoRaMacFrame>(chunk);
-        auto loraPreamble = dynamicPtrCast<const LoRaPhyPreamble>(chunk);
-        MacAddress rec;
-        if (loraPreamble)
-            rec = loraPreamble->getReceiverAddress();
-        else if (loraMac)
-            rec = loraMac->getReceiverAddress();
-
-        cModule *macModule = getParentModule()->getParentModule()->getSubmodule("mac");
-
-        auto *macRouter = dynamic_cast<LoRaMeshRouter*>(macModule);
-        if (macRouter) {
-            if (rec != macRouter->getAddress()) {
-                const_cast<LoRaReceiver*>(this)->numCollisions++;
-            }
-        } else {
-            auto *macCSMA = dynamic_cast<LoRaCSMA*>(macModule);
-            if (macCSMA) {
-                if (rec != macCSMA->getAddress()) {
-                    const_cast<LoRaReceiver*>(this)->numCollisions++;
-                }
-            } else {
-                EV_ERROR << "Unknown MAC type: neither LoRaMeshRouter nor LoRaCSMA.\n";
-            }
-        }
-
+        const_cast<LoRaReceiver*>(this)->numCollisions++;
+        EV << "Pakets collided" << endl;
         return false;
     }
     else {
@@ -165,13 +138,14 @@ bool LoRaReceiver::isPacketCollided(const IReception *reception, IRadioSignal::S
         int interferenceSF = loRaInterference->getLoRaSF();
 
         /* If difference in power between two signals is greater than threshold, no collision*/
-        if (std::abs(signalRSSI_dBm - interferenceRSSI_dBm) >= -1 * nonOrthDelta[receptionSF - 7][interferenceSF - 7] && receptionSF != interferenceSF) {
+        int acceptableDif = 6;
+        if (std::abs(signalRSSI_dBm - interferenceRSSI_dBm) >= acceptableDif) {
             captureEffect = true;
         }
 
         EV << "[MSDEBUG] Received packet at SF: " << receptionSF << " with power " << signalRSSI_dBm << endl;
         EV << "[MSDEBUG] Received interference at SF: " << interferenceSF << " with power " << interferenceRSSI_dBm << endl;
-        EV << "[MSDEBUG] Acceptable diff is equal " << nonOrthDelta[receptionSF - 7][interferenceSF - 7] << endl;
+        EV << "[MSDEBUG] Acceptable diff is equal " << acceptableDif << endl;
         EV << "[MSDEBUG] Diff is equal " << signalRSSI_dBm - interferenceRSSI_dBm << endl;
         if (captureEffect == false) {
             EV << "[MSDEBUG] Packet is discarded" << endl;
@@ -186,8 +160,6 @@ bool LoRaReceiver::isPacketCollided(const IReception *reception, IRadioSignal::S
         if (csBegin < loRaInterference->getEndTime()) {
             timingCollision = true;
         }
-
-        EV << "Timing Collision: " << timingCollision << endl;
 
         if (overlap && frequencyCollision) {
             if (alohaChannelModel == true) {

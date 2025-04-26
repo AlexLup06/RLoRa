@@ -38,6 +38,7 @@ namespace rlora {
  * class MessageTypeTag extends inet::TagBase
  * {
  *     bool isNeighbourMsg;
+ *     bool isHeader;
  * }
  * </pre>
  */
@@ -45,6 +46,7 @@ class MessageTypeTag : public ::inet::TagBase
 {
   protected:
     bool isNeighbourMsg_ = false;
+    bool isHeader_ = false;
 
   private:
     void copy(const MessageTypeTag& other);
@@ -63,6 +65,9 @@ class MessageTypeTag : public ::inet::TagBase
 
     virtual bool isNeighbourMsg() const;
     virtual void setIsNeighbourMsg(bool isNeighbourMsg);
+
+    virtual bool isHeader() const;
+    virtual void setIsHeader(bool isHeader);
 };
 
 inline void doParsimPacking(omnetpp::cCommBuffer *b, const MessageTypeTag& obj) {obj.parsimPack(b);}

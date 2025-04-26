@@ -38,8 +38,8 @@ namespace rlora {
  * {
  *     int messageId;
  *     int fragment;
- *     int size;
  *     int source;
+ *     int payloadSize;
  * }
  * </pre>
  */
@@ -48,8 +48,8 @@ class BroadcastFragment : public ::inet::FieldsChunk
   protected:
     int messageId = 0;
     int fragment = 0;
-    int size = 0;
     int source = 0;
+    int payloadSize = 0;
 
   private:
     void copy(const BroadcastFragment& other);
@@ -72,11 +72,11 @@ class BroadcastFragment : public ::inet::FieldsChunk
     virtual int getFragment() const;
     virtual void setFragment(int fragment);
 
-    virtual int getSize() const;
-    virtual void setSize(int size);
-
     virtual int getSource() const;
     virtual void setSource(int source);
+
+    virtual int getPayloadSize() const;
+    virtual void setPayloadSize(int payloadSize);
 };
 
 inline void doParsimPacking(omnetpp::cCommBuffer *b, const BroadcastFragment& obj) {obj.parsimPack(b);}

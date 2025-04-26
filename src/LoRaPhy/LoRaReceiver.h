@@ -31,6 +31,7 @@
 #include "../LoRa/LoRaRadio.h"
 #include "../LoRaMeshRouter/LoRaMeshRouter.h"
 #include "../LoRaCSMA/LoRaCSMA.h"
+#include "../LoRaAloha/LoRaAloha.h"
 #include "LoRaRadioControlInfo_m.h"
 
 

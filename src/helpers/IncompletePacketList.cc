@@ -92,7 +92,7 @@ Result IncompletePacketList::addToIncompletePacket(const BroadcastFragment *pack
         incompletePacket->corrupted = true;
     }
 
-    int totalBytesReceived = incompletePacket->received + packet->getSize();
+    int totalBytesReceived = incompletePacket->received + packet->getPayloadSize();
     int bytesLeft = incompletePacket->size - totalBytesReceived;
     int waitTime = 20 + predictSendTime(bytesLeft > 255 ? 255 : bytesLeft);
 

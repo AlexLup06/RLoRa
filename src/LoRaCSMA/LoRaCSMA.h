@@ -19,7 +19,6 @@
 
 #include "../LoRa/LoRaRadio.h"
 #include "../LoRa/LoRaMacFrame_m.h"
-#include "../LoRa/LoRaTagInfo_m.h"
 
 #include "../helpers/CustomPacketQueue.h"
 #include "../helpers/IncompletePacketList.h"
@@ -51,12 +50,16 @@ protected:
     int cwMulticast = -1;
     //@}
 
+    IRadio *radio = nullptr;
     LoRaRadio *loRaRadio;
     MacAddress address;
     IncompletePacketList incompletePacketList;
     CustomPacketQueue packetQueue;
     LatestMessageIdMap latestMessageIdMap;
     cMessage *nodeAnnounce = nullptr;
+    cMessage *transmitSwitchDone = nullptr;
+    cMessage *receptionStated = nullptr;
+    int nodeId = -1;
 
     /**
      * @name LoRaCSMA state variables
@@ -65,11 +68,11 @@ protected:
     //@{
     enum State
     {
-        IDLE, DEFER, WAITDIFS, BACKOFF, TRANSMIT, WAITACK, RECEIVE, WAITSIFS,
+        SWITCHING, LISTENING, DEFER, BACKOFF, TRANSMIT, RECEIVE,
     };
 
-    ModuleRefByPar<physicallayer::IRadio> radio;
-    physicallayer::IRadio::TransmissionState transmissionState = physicallayer::IRadio::TRANSMISSION_STATE_UNDEFINED;
+    IRadio::TransmissionState transmissionState = IRadio::TRANSMISSION_STATE_UNDEFINED;
+    IRadio::ReceptionState receptionState = IRadio::RECEPTION_STATE_UNDEFINED;
 
     cFSM fsm;
 
@@ -82,17 +85,9 @@ protected:
 
     /** @name Timer messages */
     //@{
-    /** End of the Short Inter-Frame Time period */
-    cMessage *endSifs = nullptr;
-
-    /** End of the Data Inter-Frame Time period */
-    cMessage *endDifs = nullptr;
 
     /** End of the backoff period */
     cMessage *endBackoff = nullptr;
-
-    /** End of the ack timeout */
-    cMessage *endAckTimeout = nullptr;
 
     /** Timeout after the transmission of a Data frame */
     cMessage *endData = nullptr;
@@ -121,9 +116,11 @@ public:
     virtual ~LoRaCSMA();
 
     virtual MacAddress getAddress();
-    void createBroadcastPacket(int packetSize, int messageId, int hopId, int source, bool retransmit, bool isNeighbourMsg);
+    void createBroadcastPacket(int packetSize, int messageId, int hopId, int source, bool retransmit);
     void announceNodeId(int respond);
     void handlePacket(Packet *packet);
+    void retransmitPacket(FragmentedPacket fragmentedPacket);
+    void turnOnReceiver(void);
     //@}
 
 protected:
@@ -158,13 +155,6 @@ protected:
      * @brief These functions have the side effect of starting the corresponding timers.
      */
     //@{
-    virtual void scheduleSifsTimer(Packet *frame);
-
-    virtual void scheduleDifsTimer();
-    virtual void cancelDifsTimer();
-
-    virtual void scheduleAckTimeout(Packet *frame);
-    virtual void cancelAckTimer();
 
     virtual void invalidateBackoffPeriod();
     virtual bool isInvalidBackoffPeriod();
@@ -178,8 +168,7 @@ protected:
      * @name Frame transmission functions
      */
     //@{
-    virtual void sendDataFrame(Packet *frameToSend);
-    virtual void sendAckFrame();
+    virtual void sendDataFrame();
     //@}
 
     /**
@@ -187,20 +176,13 @@ protected:
      */
     //@{
     virtual void finishCurrentTransmission();
-    virtual void giveUpCurrentTransmission();
-    virtual void retryCurrentTransmission();
     virtual Packet* getCurrentTransmission();
     virtual void resetTransmissionVariables();
     virtual void emitPacketDropSignal(Packet *frame, PacketDropReason reason, int limit = -1);
 
     virtual bool isMediumFree();
     virtual bool isReceiving();
-    virtual bool isAck(Packet *frame);
-    virtual bool isBroadcast(Packet *frame);
-    virtual bool isForUs(Packet *frame);
-    virtual bool isFcsOk(Packet *frame);
 
-    virtual uint32_t computeFcs(const Ptr<const BytesChunk> &bytes);
     //@}
 
     // OperationalBase:

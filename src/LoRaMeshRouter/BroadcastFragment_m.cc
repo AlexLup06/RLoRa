@@ -179,8 +179,8 @@ void BroadcastFragment::copy(const BroadcastFragment& other)
 {
     this->messageId = other.messageId;
     this->fragment = other.fragment;
-    this->size = other.size;
     this->source = other.source;
+    this->payloadSize = other.payloadSize;
 }
 
 void BroadcastFragment::parsimPack(omnetpp::cCommBuffer *b) const
@@ -188,8 +188,8 @@ void BroadcastFragment::parsimPack(omnetpp::cCommBuffer *b) const
     ::inet::FieldsChunk::parsimPack(b);
     doParsimPacking(b,this->messageId);
     doParsimPacking(b,this->fragment);
-    doParsimPacking(b,this->size);
     doParsimPacking(b,this->source);
+    doParsimPacking(b,this->payloadSize);
 }
 
 void BroadcastFragment::parsimUnpack(omnetpp::cCommBuffer *b)
@@ -197,8 +197,8 @@ void BroadcastFragment::parsimUnpack(omnetpp::cCommBuffer *b)
     ::inet::FieldsChunk::parsimUnpack(b);
     doParsimUnpacking(b,this->messageId);
     doParsimUnpacking(b,this->fragment);
-    doParsimUnpacking(b,this->size);
     doParsimUnpacking(b,this->source);
+    doParsimUnpacking(b,this->payloadSize);
 }
 
 int BroadcastFragment::getMessageId() const
@@ -223,17 +223,6 @@ void BroadcastFragment::setFragment(int fragment)
     this->fragment = fragment;
 }
 
-int BroadcastFragment::getSize() const
-{
-    return this->size;
-}
-
-void BroadcastFragment::setSize(int size)
-{
-    handleChange();
-    this->size = size;
-}
-
 int BroadcastFragment::getSource() const
 {
     return this->source;
@@ -245,6 +234,17 @@ void BroadcastFragment::setSource(int source)
     this->source = source;
 }
 
+int BroadcastFragment::getPayloadSize() const
+{
+    return this->payloadSize;
+}
+
+void BroadcastFragment::setPayloadSize(int payloadSize)
+{
+    handleChange();
+    this->payloadSize = payloadSize;
+}
+
 class BroadcastFragmentDescriptor : public omnetpp::cClassDescriptor
 {
   private:
@@ -252,8 +252,8 @@ class BroadcastFragmentDescriptor : public omnetpp::cClassDescriptor
     enum FieldConstants {
         FIELD_messageId,
         FIELD_fragment,
-        FIELD_size,
         FIELD_source,
+        FIELD_payloadSize,
     };
   public:
     BroadcastFragmentDescriptor();
@@ -334,8 +334,8 @@ unsigned int BroadcastFragmentDescriptor::getFieldTypeFlags(int field) const
     static unsigned int fieldTypeFlags[] = {
         FD_ISEDITABLE,    // FIELD_messageId
         FD_ISEDITABLE,    // FIELD_fragment
-        FD_ISEDITABLE,    // FIELD_size
         FD_ISEDITABLE,    // FIELD_source
+        FD_ISEDITABLE,    // FIELD_payloadSize
     };
     return (field >= 0 && field < 4) ? fieldTypeFlags[field] : 0;
 }
@@ -351,8 +351,8 @@ const char *BroadcastFragmentDescriptor::getFieldName(int field) const
     static const char *fieldNames[] = {
         "messageId",
         "fragment",
-        "size",
         "source",
+        "payloadSize",
     };
     return (field >= 0 && field < 4) ? fieldNames[field] : nullptr;
 }
@@ -363,8 +363,8 @@ int BroadcastFragmentDescriptor::findField(const char *fieldName) const
     int baseIndex = base ? base->getFieldCount() : 0;
     if (strcmp(fieldName, "messageId") == 0) return baseIndex + 0;
     if (strcmp(fieldName, "fragment") == 0) return baseIndex + 1;
-    if (strcmp(fieldName, "size") == 0) return baseIndex + 2;
-    if (strcmp(fieldName, "source") == 0) return baseIndex + 3;
+    if (strcmp(fieldName, "source") == 0) return baseIndex + 2;
+    if (strcmp(fieldName, "payloadSize") == 0) return baseIndex + 3;
     return base ? base->findField(fieldName) : -1;
 }
 
@@ -379,8 +379,8 @@ const char *BroadcastFragmentDescriptor::getFieldTypeString(int field) const
     static const char *fieldTypeStrings[] = {
         "int",    // FIELD_messageId
         "int",    // FIELD_fragment
-        "int",    // FIELD_size
         "int",    // FIELD_source
+        "int",    // FIELD_payloadSize
     };
     return (field >= 0 && field < 4) ? fieldTypeStrings[field] : nullptr;
 }
@@ -467,8 +467,8 @@ std::string BroadcastFragmentDescriptor::getFieldValueAsString(omnetpp::any_ptr 
     switch (field) {
         case FIELD_messageId: return long2string(pp->getMessageId());
         case FIELD_fragment: return long2string(pp->getFragment());
-        case FIELD_size: return long2string(pp->getSize());
         case FIELD_source: return long2string(pp->getSource());
+        case FIELD_payloadSize: return long2string(pp->getPayloadSize());
         default: return "";
     }
 }
@@ -487,8 +487,8 @@ void BroadcastFragmentDescriptor::setFieldValueAsString(omnetpp::any_ptr object,
     switch (field) {
         case FIELD_messageId: pp->setMessageId(string2long(value)); break;
         case FIELD_fragment: pp->setFragment(string2long(value)); break;
-        case FIELD_size: pp->setSize(string2long(value)); break;
         case FIELD_source: pp->setSource(string2long(value)); break;
+        case FIELD_payloadSize: pp->setPayloadSize(string2long(value)); break;
         default: throw omnetpp::cRuntimeError("Cannot set field %d of class 'BroadcastFragment'", field);
     }
 }
@@ -505,8 +505,8 @@ omnetpp::cValue BroadcastFragmentDescriptor::getFieldValue(omnetpp::any_ptr obje
     switch (field) {
         case FIELD_messageId: return pp->getMessageId();
         case FIELD_fragment: return pp->getFragment();
-        case FIELD_size: return pp->getSize();
         case FIELD_source: return pp->getSource();
+        case FIELD_payloadSize: return pp->getPayloadSize();
         default: throw omnetpp::cRuntimeError("Cannot return field %d of class 'BroadcastFragment' as cValue -- field index out of range?", field);
     }
 }
@@ -525,8 +525,8 @@ void BroadcastFragmentDescriptor::setFieldValue(omnetpp::any_ptr object, int fie
     switch (field) {
         case FIELD_messageId: pp->setMessageId(omnetpp::checked_int_cast<int>(value.intValue())); break;
         case FIELD_fragment: pp->setFragment(omnetpp::checked_int_cast<int>(value.intValue())); break;
-        case FIELD_size: pp->setSize(omnetpp::checked_int_cast<int>(value.intValue())); break;
         case FIELD_source: pp->setSource(omnetpp::checked_int_cast<int>(value.intValue())); break;
+        case FIELD_payloadSize: pp->setPayloadSize(omnetpp::checked_int_cast<int>(value.intValue())); break;
         default: throw omnetpp::cRuntimeError("Cannot set field %d of class 'BroadcastFragment'", field);
     }
 }

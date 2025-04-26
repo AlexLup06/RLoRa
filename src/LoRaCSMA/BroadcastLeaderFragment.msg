@@ -13,18 +13,24 @@
 // along with this program.  If not, see http://www.gnu.org/licenses/.
 // 
 
-//based on Ieee802154NarrowbandMac
+import inet.common.packet.chunk.Chunk; 
+import inet.common.Units;
 
-package rlora.LoRa;
 
-import inet.linklayer.csmaca.CsmaCaMac;
+cplusplus {{
+using namespace inet;
+}}
 
-module LoRaMac extends CsmaCaMac
-{
-    parameters:
-        bitrate = 250bps;
-        @class(LoRaMac);
-    gates:
-        input upperMgmtIn;
-        output upperMgmtOut;
+namespace rlora;
+
+//
+// TODO generated message class
+//
+class BroadcastLeaderFragment extends inet::FieldsChunk {
+    int source;
+    int hop;
+    int messageId;
+    int size;
+    int payloadSize;
+    bool retransmit;
 }

@@ -20,8 +20,8 @@ namespace rlora {
 
 Define_Module(LoRaApp);
 
-
-void LoRaApp::initialize(int stage) {
+void LoRaApp::initialize(int stage)
+{
     cSimpleModule::initialize(stage);
     if (stage == INITSTAGE_APPLICATION_LAYER) {
         timeToFirstPacket = par("timeToFirstPacket");
@@ -35,23 +35,19 @@ void LoRaApp::initialize(int stage) {
         }
 
         //LoRa physical layer parameters
-        loRaRadio = check_and_cast<LoRaRadio*>(
-                getParentModule()->getSubmodule("LoRaNic")->getSubmodule(
-                        "radio"));
+        loRaRadio = check_and_cast<LoRaRadio*>(getParentModule()->getSubmodule("LoRaNic")->getSubmodule("radio"));
         loRaRadio->loRaTP = par("initialLoRaTP").doubleValue();
-        loRaRadio->loRaCF = units::values::Hz(
-                par("initialLoRaCF").doubleValue());
+        loRaRadio->loRaCF = units::values::Hz(par("initialLoRaCF").doubleValue());
         loRaRadio->loRaSF = par("initialLoRaSF");
-        loRaRadio->loRaBW = inet::units::values::Hz(
-                par("initialLoRaBW").doubleValue());
+        loRaRadio->loRaBW = inet::units::values::Hz(par("initialLoRaBW").doubleValue());
         loRaRadio->loRaCR = par("initialLoRaCR");
         loRaRadio->loRaUseHeader = par("initialUseHeader");
     }
 }
 
-void LoRaApp::handleMessage(cMessage *msg) {
+void LoRaApp::handleMessage(cMessage *msg)
+{
     if (msg->isSelfMessage()) {
-        EV << "Got self message" << endl;
         if (msg == sendMessage) {
             sendMessageDown();
             sentPackets++;
@@ -60,17 +56,18 @@ void LoRaApp::handleMessage(cMessage *msg) {
                 scheduleAt(simTime() + timeToNextPacket, sendMessage);
             }
         }
-    } else {
-        EV << "Got some other msg"<<endl;
+    }
+    else {
+        EV << "Got some other msg" << endl;
         delete msg;
     }
 }
 
-void LoRaApp::sendMessageDown() {
+void LoRaApp::sendMessageDown()
+{
     auto pktRequest = new Packet("DataFrame");
     auto payload = makeShared<LoRaRobotPacket>();
     payload->setChunkLength(B(252));
-
 
     auto loraTag = pktRequest->addTagIfAbsent<LoRaTag>();
     loraTag->setBandwidth(getBW());
@@ -83,53 +80,61 @@ void LoRaApp::sendMessageDown() {
     send(pktRequest, "socketOut");
 }
 
-bool LoRaApp::handleOperationStage(LifecycleOperation *operation,
-        IDoneCallback *doneCallback) {
+bool LoRaApp::handleOperationStage(LifecycleOperation *operation, IDoneCallback *doneCallback)
+{
     Enter_Method_Silent();
 
-    throw cRuntimeError("Unsupported lifecycle operation '%s'",
-            operation->getClassName());
+    throw cRuntimeError("Unsupported lifecycle operation '%s'", operation->getClassName());
     return true;
 }
 
-
-void LoRaApp::setSF(int SF) {
+void LoRaApp::setSF(int SF)
+{
     loRaRadio->loRaSF = SF;
 }
 
-int LoRaApp::getSF() {
+int LoRaApp::getSF()
+{
     return loRaRadio->loRaSF;
 }
 
-void LoRaApp::setTP(int TP) {
+void LoRaApp::setTP(int TP)
+{
     loRaRadio->loRaTP = TP;
 }
 
-double LoRaApp::getTP() {
+double LoRaApp::getTP()
+{
     return loRaRadio->loRaTP;
 }
 
-void LoRaApp::setCF(units::values::Hz CF) {
+void LoRaApp::setCF(units::values::Hz CF)
+{
     loRaRadio->loRaCF = CF;
 }
 
-units::values::Hz LoRaApp::getCF() {
+units::values::Hz LoRaApp::getCF()
+{
     return loRaRadio->loRaCF;
 }
 
-void LoRaApp::setBW(units::values::Hz BW) {
+void LoRaApp::setBW(units::values::Hz BW)
+{
     loRaRadio->loRaBW = BW;
 }
 
-units::values::Hz LoRaApp::getBW() {
+units::values::Hz LoRaApp::getBW()
+{
     return loRaRadio->loRaBW;
 }
 
-void LoRaApp::setCR(int CR) {
+void LoRaApp::setCR(int CR)
+{
     loRaRadio->loRaCR = CR;
 }
 
-int LoRaApp::getCR() {
+int LoRaApp::getCR()
+{
     return loRaRadio->loRaCR;
 }
 

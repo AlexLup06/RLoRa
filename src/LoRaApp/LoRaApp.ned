@@ -24,7 +24,7 @@ simple LoRaApp like IApp
 {
     parameters:
         @class(LoRaApp);
-        int numberOfPacketsToSend = default(2);
+        int numberOfPacketsToSend = default(0);
         volatile double timeToFirstPacket @unit(s) = default(10s);
         volatile double timeToNextPacket @unit(s) = default(10s);
         double initialLoRaTP @unit(dBm) = default(14dBm);

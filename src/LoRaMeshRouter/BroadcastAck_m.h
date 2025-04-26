@@ -1,5 +1,5 @@
 //
-// Generated file, do not edit! Created by opp_msgtool 6.0 from NewLoRaMac/BroadcastAck.msg.
+// Generated file, do not edit! Created by opp_msgtool 6.0 from LoRaMeshRouter/BroadcastAck.msg.
 //
 
 #ifndef __RLORA_BROADCASTACK_M_H
@@ -29,7 +29,7 @@ class BroadcastAck;
 namespace rlora {
 
 /**
- * Class generated from <tt>NewLoRaMac/BroadcastAck.msg:23</tt> by opp_msgtool.
+ * Class generated from <tt>LoRaMeshRouter/BroadcastAck.msg:23</tt> by opp_msgtool.
  * <pre>
  * //
  * // TODO generated message class

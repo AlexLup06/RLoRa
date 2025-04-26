@@ -28,11 +28,11 @@ void CustomPacketQueue::enqueuePacket(Packet *pkt, bool isHeader)
     auto typeTag = pkt->getTag<MessageTypeTag>();
 
     if (!typeTag->isNeighbourMsg()) {
+        EV << "Just adding to back" << endl;
         packetQueue.push_back(pkt);
         return;
     }
 
-    EV << "Inserting neighbour msg" << endl;
     if (isHeader) {
         // Remove all NeighbourMsg packets and find the position of the first one
         int firstNeighbourPos = -1;
@@ -41,13 +41,18 @@ void CustomPacketQueue::enqueuePacket(Packet *pkt, bool isHeader)
         for (auto it = packetQueue.begin(); it != packetQueue.end();) {
             auto tag = (*it)->getTag<MessageTypeTag>();
 
+            // if the header was already sent we dont want to override the rest of the packet
+            if (tag->isNeighbourMsg() && firstNeighbourPos == -1 && !tag->isHeader()) {
+                continue;
+            }
+
             if (tag->isNeighbourMsg()) {
                 if (firstNeighbourPos == -1) {
                     firstNeighbourPos = index;
                 }
                 delete *it;
                 it = packetQueue.erase(it); // erase returns the next valid iterator
-                EV << "Erasing Old neighbour packet" << endl;
+                EV << "Erase neighbour packet" << endl;
             }
             else {
                 ++it;
@@ -57,11 +62,12 @@ void CustomPacketQueue::enqueuePacket(Packet *pkt, bool isHeader)
 
         // If no NeighbourMsgs were found, just push_back
         if (firstNeighbourPos == -1) {
-            EV << "No old neighbour packet found. Inserting at back" << endl;
+            EV << "Just adding to back" << endl;
             packetQueue.push_back(pkt);
         }
         else {
-            EV << "old neighbour packet found at: " << firstNeighbourPos << endl;
+            EV << "removed all unwanted and now enqueuing at postion" << endl;
+
             enqueuePacketAtPosition(pkt, firstNeighbourPos);
         }
     }
@@ -70,10 +76,16 @@ void CustomPacketQueue::enqueuePacket(Packet *pkt, bool isHeader)
         auto it = packetQueue.begin();
         auto lastNeighbourIt = packetQueue.end();
 
+        bool allowedToinsert = false;
+
         for (; it != packetQueue.end(); ++it) {
             auto tag = (*it)->getTag<MessageTypeTag>();
 
-            if (tag->isNeighbourMsg()) {
+            if (tag->isNeighbourMsg() && tag->isHeader()) {
+                allowedToinsert = true;
+            }
+
+            if (tag->isNeighbourMsg() && allowedToinsert) {
                 lastNeighbourIt = it;
             }
         }
@@ -112,7 +124,7 @@ void CustomPacketQueue::removePacketAtPosition(int pos)
     }
 
     auto it = packetQueue.begin();
-    std::advance(it, pos);
+    advance(it, pos);
 
     delete *it;
     packetQueue.erase(it);

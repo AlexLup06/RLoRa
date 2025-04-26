@@ -34,8 +34,8 @@ O = $(PROJECT_OUTPUT_DIR)/$(CONFIGNAME)/$(PROJECTRELATIVE_PATH)
 
 # Object files for local .cc, .msg and .sm files
 OBJS = \
-    $O/LoRa/LoRaMac.o \
     $O/LoRa/LoRaRadio.o \
+    $O/LoRaAloha/LoRaAloha.o \
     $O/LoRaApp/LoRaApp.o \
     $O/LoRaCSMA/LoRaCSMA.o \
     $O/LoRaEnergyModules/LoRaEnergyConsumer.o \
@@ -60,6 +60,7 @@ OBJS = \
     $O/LoRa/LoRaMacFrame_m.o \
     $O/LoRa/LoRaTagInfo_m.o \
     $O/LoRaApp/LoRaRobotPacket_m.o \
+    $O/LoRaCSMA/BroadcastLeaderFragment_m.o \
     $O/LoRaMeshRouter/BroadcastAck_m.o \
     $O/LoRaMeshRouter/BroadcastFragment_m.o \
     $O/LoRaMeshRouter/BroadcastHeader_m.o \
@@ -73,6 +74,7 @@ MSGFILES = \
     LoRa/LoRaMacFrame.msg \
     LoRa/LoRaTagInfo.msg \
     LoRaApp/LoRaRobotPacket.msg \
+    LoRaCSMA/BroadcastLeaderFragment.msg \
     LoRaMeshRouter/BroadcastAck.msg \
     LoRaMeshRouter/BroadcastFragment.msg \
     LoRaMeshRouter/BroadcastHeader.msg \

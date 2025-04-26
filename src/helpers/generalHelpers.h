@@ -34,6 +34,7 @@ string generate_uuid();
 #define BROADCAST_HEADER_SIZE 8
 #define NODE_ANNOUNCE_SIZE 12
 #define BROADCAST_FRAGMENT_META_SIZE 4
+#define BROADCAST_LEADER_FRAGMENT_META_SIZE 8
 
 } // namespace rlora
 

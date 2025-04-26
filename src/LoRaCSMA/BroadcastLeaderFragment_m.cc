@@ -1,5 +1,5 @@
 //
-// Generated file, do not edit! Created by opp_msgtool 6.0 from helpers/MessageTypeTag.msg.
+// Generated file, do not edit! Created by opp_msgtool 6.0 from LoRaCSMA/BroadcastLeaderFragment.msg.
 //
 
 // Disable warnings about unused variables, empty switch stmts, etc:
@@ -28,7 +28,7 @@
 #include <sstream>
 #include <memory>
 #include <type_traits>
-#include "MessageTypeTag_m.h"
+#include "BroadcastLeaderFragment_m.h"
 
 namespace omnetpp {
 
@@ -152,80 +152,142 @@ void doParsimUnpacking(omnetpp::cCommBuffer *, T& t)
 
 namespace rlora {
 
-Register_Class(MessageTypeTag)
+Register_Class(BroadcastLeaderFragment)
 
-MessageTypeTag::MessageTypeTag() : ::inet::TagBase()
+BroadcastLeaderFragment::BroadcastLeaderFragment() : ::inet::FieldsChunk()
 {
 }
 
-MessageTypeTag::MessageTypeTag(const MessageTypeTag& other) : ::inet::TagBase(other)
+BroadcastLeaderFragment::BroadcastLeaderFragment(const BroadcastLeaderFragment& other) : ::inet::FieldsChunk(other)
 {
     copy(other);
 }
 
-MessageTypeTag::~MessageTypeTag()
+BroadcastLeaderFragment::~BroadcastLeaderFragment()
 {
 }
 
-MessageTypeTag& MessageTypeTag::operator=(const MessageTypeTag& other)
+BroadcastLeaderFragment& BroadcastLeaderFragment::operator=(const BroadcastLeaderFragment& other)
 {
     if (this == &other) return *this;
-    ::inet::TagBase::operator=(other);
+    ::inet::FieldsChunk::operator=(other);
     copy(other);
     return *this;
 }
 
-void MessageTypeTag::copy(const MessageTypeTag& other)
+void BroadcastLeaderFragment::copy(const BroadcastLeaderFragment& other)
 {
-    this->isNeighbourMsg_ = other.isNeighbourMsg_;
-    this->isHeader_ = other.isHeader_;
+    this->source = other.source;
+    this->hop = other.hop;
+    this->messageId = other.messageId;
+    this->size = other.size;
+    this->payloadSize = other.payloadSize;
+    this->retransmit = other.retransmit;
 }
 
-void MessageTypeTag::parsimPack(omnetpp::cCommBuffer *b) const
+void BroadcastLeaderFragment::parsimPack(omnetpp::cCommBuffer *b) const
 {
-    ::inet::TagBase::parsimPack(b);
-    doParsimPacking(b,this->isNeighbourMsg_);
-    doParsimPacking(b,this->isHeader_);
+    ::inet::FieldsChunk::parsimPack(b);
+    doParsimPacking(b,this->source);
+    doParsimPacking(b,this->hop);
+    doParsimPacking(b,this->messageId);
+    doParsimPacking(b,this->size);
+    doParsimPacking(b,this->payloadSize);
+    doParsimPacking(b,this->retransmit);
 }
 
-void MessageTypeTag::parsimUnpack(omnetpp::cCommBuffer *b)
+void BroadcastLeaderFragment::parsimUnpack(omnetpp::cCommBuffer *b)
 {
-    ::inet::TagBase::parsimUnpack(b);
-    doParsimUnpacking(b,this->isNeighbourMsg_);
-    doParsimUnpacking(b,this->isHeader_);
+    ::inet::FieldsChunk::parsimUnpack(b);
+    doParsimUnpacking(b,this->source);
+    doParsimUnpacking(b,this->hop);
+    doParsimUnpacking(b,this->messageId);
+    doParsimUnpacking(b,this->size);
+    doParsimUnpacking(b,this->payloadSize);
+    doParsimUnpacking(b,this->retransmit);
 }
 
-bool MessageTypeTag::isNeighbourMsg() const
+int BroadcastLeaderFragment::getSource() const
 {
-    return this->isNeighbourMsg_;
+    return this->source;
 }
 
-void MessageTypeTag::setIsNeighbourMsg(bool isNeighbourMsg)
+void BroadcastLeaderFragment::setSource(int source)
 {
-    this->isNeighbourMsg_ = isNeighbourMsg;
+    handleChange();
+    this->source = source;
 }
 
-bool MessageTypeTag::isHeader() const
+int BroadcastLeaderFragment::getHop() const
 {
-    return this->isHeader_;
+    return this->hop;
 }
 
-void MessageTypeTag::setIsHeader(bool isHeader)
+void BroadcastLeaderFragment::setHop(int hop)
 {
-    this->isHeader_ = isHeader;
+    handleChange();
+    this->hop = hop;
 }
 
-class MessageTypeTagDescriptor : public omnetpp::cClassDescriptor
+int BroadcastLeaderFragment::getMessageId() const
+{
+    return this->messageId;
+}
+
+void BroadcastLeaderFragment::setMessageId(int messageId)
+{
+    handleChange();
+    this->messageId = messageId;
+}
+
+int BroadcastLeaderFragment::getSize() const
+{
+    return this->size;
+}
+
+void BroadcastLeaderFragment::setSize(int size)
+{
+    handleChange();
+    this->size = size;
+}
+
+int BroadcastLeaderFragment::getPayloadSize() const
+{
+    return this->payloadSize;
+}
+
+void BroadcastLeaderFragment::setPayloadSize(int payloadSize)
+{
+    handleChange();
+    this->payloadSize = payloadSize;
+}
+
+bool BroadcastLeaderFragment::getRetransmit() const
+{
+    return this->retransmit;
+}
+
+void BroadcastLeaderFragment::setRetransmit(bool retransmit)
+{
+    handleChange();
+    this->retransmit = retransmit;
+}
+
+class BroadcastLeaderFragmentDescriptor : public omnetpp::cClassDescriptor
 {
   private:
     mutable const char **propertyNames;
     enum FieldConstants {
-        FIELD_isNeighbourMsg,
-        FIELD_isHeader,
+        FIELD_source,
+        FIELD_hop,
+        FIELD_messageId,
+        FIELD_size,
+        FIELD_payloadSize,
+        FIELD_retransmit,
     };
   public:
-    MessageTypeTagDescriptor();
-    virtual ~MessageTypeTagDescriptor();
+    BroadcastLeaderFragmentDescriptor();
+    virtual ~BroadcastLeaderFragmentDescriptor();
 
     virtual bool doesSupport(omnetpp::cObject *obj) const override;
     virtual const char **getPropertyNames() const override;
@@ -251,24 +313,24 @@ class MessageTypeTagDescriptor : public omnetpp::cClassDescriptor
     virtual void setFieldStructValuePointer(omnetpp::any_ptr object, int field, int i, omnetpp::any_ptr ptr) const override;
 };
 
-Register_ClassDescriptor(MessageTypeTagDescriptor)
+Register_ClassDescriptor(BroadcastLeaderFragmentDescriptor)
 
-MessageTypeTagDescriptor::MessageTypeTagDescriptor() : omnetpp::cClassDescriptor(omnetpp::opp_typename(typeid(rlora::MessageTypeTag)), "inet::TagBase")
+BroadcastLeaderFragmentDescriptor::BroadcastLeaderFragmentDescriptor() : omnetpp::cClassDescriptor(omnetpp::opp_typename(typeid(rlora::BroadcastLeaderFragment)), "inet::FieldsChunk")
 {
     propertyNames = nullptr;
 }
 
-MessageTypeTagDescriptor::~MessageTypeTagDescriptor()
+BroadcastLeaderFragmentDescriptor::~BroadcastLeaderFragmentDescriptor()
 {
     delete[] propertyNames;
 }
 
-bool MessageTypeTagDescriptor::doesSupport(omnetpp::cObject *obj) const
+bool BroadcastLeaderFragmentDescriptor::doesSupport(omnetpp::cObject *obj) const
 {
-    return dynamic_cast<MessageTypeTag *>(obj)!=nullptr;
+    return dynamic_cast<BroadcastLeaderFragment *>(obj)!=nullptr;
 }
 
-const char **MessageTypeTagDescriptor::getPropertyNames() const
+const char **BroadcastLeaderFragmentDescriptor::getPropertyNames() const
 {
     if (!propertyNames) {
         static const char *names[] = {  nullptr };
@@ -279,19 +341,19 @@ const char **MessageTypeTagDescriptor::getPropertyNames() const
     return propertyNames;
 }
 
-const char *MessageTypeTagDescriptor::getProperty(const char *propertyName) const
+const char *BroadcastLeaderFragmentDescriptor::getProperty(const char *propertyName) const
 {
     omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
     return base ? base->getProperty(propertyName) : nullptr;
 }
 
-int MessageTypeTagDescriptor::getFieldCount() const
+int BroadcastLeaderFragmentDescriptor::getFieldCount() const
 {
     omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
-    return base ? 2+base->getFieldCount() : 2;
+    return base ? 6+base->getFieldCount() : 6;
 }
 
-unsigned int MessageTypeTagDescriptor::getFieldTypeFlags(int field) const
+unsigned int BroadcastLeaderFragmentDescriptor::getFieldTypeFlags(int field) const
 {
     omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
     if (base) {
@@ -300,13 +362,17 @@ unsigned int MessageTypeTagDescriptor::getFieldTypeFlags(int field) const
         field -= base->getFieldCount();
     }
     static unsigned int fieldTypeFlags[] = {
-        FD_ISEDITABLE,    // FIELD_isNeighbourMsg
-        FD_ISEDITABLE,    // FIELD_isHeader
+        FD_ISEDITABLE,    // FIELD_source
+        FD_ISEDITABLE,    // FIELD_hop
+        FD_ISEDITABLE,    // FIELD_messageId
+        FD_ISEDITABLE,    // FIELD_size
+        FD_ISEDITABLE,    // FIELD_payloadSize
+        FD_ISEDITABLE,    // FIELD_retransmit
     };
-    return (field >= 0 && field < 2) ? fieldTypeFlags[field] : 0;
+    return (field >= 0 && field < 6) ? fieldTypeFlags[field] : 0;
 }
 
-const char *MessageTypeTagDescriptor::getFieldName(int field) const
+const char *BroadcastLeaderFragmentDescriptor::getFieldName(int field) const
 {
     omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
     if (base) {
@@ -315,22 +381,30 @@ const char *MessageTypeTagDescriptor::getFieldName(int field) const
         field -= base->getFieldCount();
     }
     static const char *fieldNames[] = {
-        "isNeighbourMsg",
-        "isHeader",
+        "source",
+        "hop",
+        "messageId",
+        "size",
+        "payloadSize",
+        "retransmit",
     };
-    return (field >= 0 && field < 2) ? fieldNames[field] : nullptr;
+    return (field >= 0 && field < 6) ? fieldNames[field] : nullptr;
 }
 
-int MessageTypeTagDescriptor::findField(const char *fieldName) const
+int BroadcastLeaderFragmentDescriptor::findField(const char *fieldName) const
 {
     omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
     int baseIndex = base ? base->getFieldCount() : 0;
-    if (strcmp(fieldName, "isNeighbourMsg") == 0) return baseIndex + 0;
-    if (strcmp(fieldName, "isHeader") == 0) return baseIndex + 1;
+    if (strcmp(fieldName, "source") == 0) return baseIndex + 0;
+    if (strcmp(fieldName, "hop") == 0) return baseIndex + 1;
+    if (strcmp(fieldName, "messageId") == 0) return baseIndex + 2;
+    if (strcmp(fieldName, "size") == 0) return baseIndex + 3;
+    if (strcmp(fieldName, "payloadSize") == 0) return baseIndex + 4;
+    if (strcmp(fieldName, "retransmit") == 0) return baseIndex + 5;
     return base ? base->findField(fieldName) : -1;
 }
 
-const char *MessageTypeTagDescriptor::getFieldTypeString(int field) const
+const char *BroadcastLeaderFragmentDescriptor::getFieldTypeString(int field) const
 {
     omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
     if (base) {
@@ -339,13 +413,17 @@ const char *MessageTypeTagDescriptor::getFieldTypeString(int field) const
         field -= base->getFieldCount();
     }
     static const char *fieldTypeStrings[] = {
-        "bool",    // FIELD_isNeighbourMsg
-        "bool",    // FIELD_isHeader
+        "int",    // FIELD_source
+        "int",    // FIELD_hop
+        "int",    // FIELD_messageId
+        "int",    // FIELD_size
+        "int",    // FIELD_payloadSize
+        "bool",    // FIELD_retransmit
     };
-    return (field >= 0 && field < 2) ? fieldTypeStrings[field] : nullptr;
+    return (field >= 0 && field < 6) ? fieldTypeStrings[field] : nullptr;
 }
 
-const char **MessageTypeTagDescriptor::getFieldPropertyNames(int field) const
+const char **BroadcastLeaderFragmentDescriptor::getFieldPropertyNames(int field) const
 {
     omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
     if (base) {
@@ -358,7 +436,7 @@ const char **MessageTypeTagDescriptor::getFieldPropertyNames(int field) const
     }
 }
 
-const char *MessageTypeTagDescriptor::getFieldProperty(int field, const char *propertyName) const
+const char *BroadcastLeaderFragmentDescriptor::getFieldProperty(int field, const char *propertyName) const
 {
     omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
     if (base) {
@@ -371,7 +449,7 @@ const char *MessageTypeTagDescriptor::getFieldProperty(int field, const char *pr
     }
 }
 
-int MessageTypeTagDescriptor::getFieldArraySize(omnetpp::any_ptr object, int field) const
+int BroadcastLeaderFragmentDescriptor::getFieldArraySize(omnetpp::any_ptr object, int field) const
 {
     omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
     if (base) {
@@ -379,13 +457,13 @@ int MessageTypeTagDescriptor::getFieldArraySize(omnetpp::any_ptr object, int fie
             return base->getFieldArraySize(object, field);
         field -= base->getFieldCount();
     }
-    MessageTypeTag *pp = omnetpp::fromAnyPtr<MessageTypeTag>(object); (void)pp;
+    BroadcastLeaderFragment *pp = omnetpp::fromAnyPtr<BroadcastLeaderFragment>(object); (void)pp;
     switch (field) {
         default: return 0;
     }
 }
 
-void MessageTypeTagDescriptor::setFieldArraySize(omnetpp::any_ptr object, int field, int size) const
+void BroadcastLeaderFragmentDescriptor::setFieldArraySize(omnetpp::any_ptr object, int field, int size) const
 {
     omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
     if (base) {
@@ -395,13 +473,13 @@ void MessageTypeTagDescriptor::setFieldArraySize(omnetpp::any_ptr object, int fi
         }
         field -= base->getFieldCount();
     }
-    MessageTypeTag *pp = omnetpp::fromAnyPtr<MessageTypeTag>(object); (void)pp;
+    BroadcastLeaderFragment *pp = omnetpp::fromAnyPtr<BroadcastLeaderFragment>(object); (void)pp;
     switch (field) {
-        default: throw omnetpp::cRuntimeError("Cannot set array size of field %d of class 'MessageTypeTag'", field);
+        default: throw omnetpp::cRuntimeError("Cannot set array size of field %d of class 'BroadcastLeaderFragment'", field);
     }
 }
 
-const char *MessageTypeTagDescriptor::getFieldDynamicTypeString(omnetpp::any_ptr object, int field, int i) const
+const char *BroadcastLeaderFragmentDescriptor::getFieldDynamicTypeString(omnetpp::any_ptr object, int field, int i) const
 {
     omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
     if (base) {
@@ -409,13 +487,13 @@ const char *MessageTypeTagDescriptor::getFieldDynamicTypeString(omnetpp::any_ptr
             return base->getFieldDynamicTypeString(object,field,i);
         field -= base->getFieldCount();
     }
-    MessageTypeTag *pp = omnetpp::fromAnyPtr<MessageTypeTag>(object); (void)pp;
+    BroadcastLeaderFragment *pp = omnetpp::fromAnyPtr<BroadcastLeaderFragment>(object); (void)pp;
     switch (field) {
         default: return nullptr;
     }
 }
 
-std::string MessageTypeTagDescriptor::getFieldValueAsString(omnetpp::any_ptr object, int field, int i) const
+std::string BroadcastLeaderFragmentDescriptor::getFieldValueAsString(omnetpp::any_ptr object, int field, int i) const
 {
     omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
     if (base) {
@@ -423,15 +501,19 @@ std::string MessageTypeTagDescriptor::getFieldValueAsString(omnetpp::any_ptr obj
             return base->getFieldValueAsString(object,field,i);
         field -= base->getFieldCount();
     }
-    MessageTypeTag *pp = omnetpp::fromAnyPtr<MessageTypeTag>(object); (void)pp;
+    BroadcastLeaderFragment *pp = omnetpp::fromAnyPtr<BroadcastLeaderFragment>(object); (void)pp;
     switch (field) {
-        case FIELD_isNeighbourMsg: return bool2string(pp->isNeighbourMsg());
-        case FIELD_isHeader: return bool2string(pp->isHeader());
+        case FIELD_source: return long2string(pp->getSource());
+        case FIELD_hop: return long2string(pp->getHop());
+        case FIELD_messageId: return long2string(pp->getMessageId());
+        case FIELD_size: return long2string(pp->getSize());
+        case FIELD_payloadSize: return long2string(pp->getPayloadSize());
+        case FIELD_retransmit: return bool2string(pp->getRetransmit());
         default: return "";
     }
 }
 
-void MessageTypeTagDescriptor::setFieldValueAsString(omnetpp::any_ptr object, int field, int i, const char *value) const
+void BroadcastLeaderFragmentDescriptor::setFieldValueAsString(omnetpp::any_ptr object, int field, int i, const char *value) const
 {
     omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
     if (base) {
@@ -441,15 +523,19 @@ void MessageTypeTagDescriptor::setFieldValueAsString(omnetpp::any_ptr object, in
         }
         field -= base->getFieldCount();
     }
-    MessageTypeTag *pp = omnetpp::fromAnyPtr<MessageTypeTag>(object); (void)pp;
+    BroadcastLeaderFragment *pp = omnetpp::fromAnyPtr<BroadcastLeaderFragment>(object); (void)pp;
     switch (field) {
-        case FIELD_isNeighbourMsg: pp->setIsNeighbourMsg(string2bool(value)); break;
-        case FIELD_isHeader: pp->setIsHeader(string2bool(value)); break;
-        default: throw omnetpp::cRuntimeError("Cannot set field %d of class 'MessageTypeTag'", field);
+        case FIELD_source: pp->setSource(string2long(value)); break;
+        case FIELD_hop: pp->setHop(string2long(value)); break;
+        case FIELD_messageId: pp->setMessageId(string2long(value)); break;
+        case FIELD_size: pp->setSize(string2long(value)); break;
+        case FIELD_payloadSize: pp->setPayloadSize(string2long(value)); break;
+        case FIELD_retransmit: pp->setRetransmit(string2bool(value)); break;
+        default: throw omnetpp::cRuntimeError("Cannot set field %d of class 'BroadcastLeaderFragment'", field);
     }
 }
 
-omnetpp::cValue MessageTypeTagDescriptor::getFieldValue(omnetpp::any_ptr object, int field, int i) const
+omnetpp::cValue BroadcastLeaderFragmentDescriptor::getFieldValue(omnetpp::any_ptr object, int field, int i) const
 {
     omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
     if (base) {
@@ -457,15 +543,19 @@ omnetpp::cValue MessageTypeTagDescriptor::getFieldValue(omnetpp::any_ptr object,
             return base->getFieldValue(object,field,i);
         field -= base->getFieldCount();
     }
-    MessageTypeTag *pp = omnetpp::fromAnyPtr<MessageTypeTag>(object); (void)pp;
+    BroadcastLeaderFragment *pp = omnetpp::fromAnyPtr<BroadcastLeaderFragment>(object); (void)pp;
     switch (field) {
-        case FIELD_isNeighbourMsg: return pp->isNeighbourMsg();
-        case FIELD_isHeader: return pp->isHeader();
-        default: throw omnetpp::cRuntimeError("Cannot return field %d of class 'MessageTypeTag' as cValue -- field index out of range?", field);
+        case FIELD_source: return pp->getSource();
+        case FIELD_hop: return pp->getHop();
+        case FIELD_messageId: return pp->getMessageId();
+        case FIELD_size: return pp->getSize();
+        case FIELD_payloadSize: return pp->getPayloadSize();
+        case FIELD_retransmit: return pp->getRetransmit();
+        default: throw omnetpp::cRuntimeError("Cannot return field %d of class 'BroadcastLeaderFragment' as cValue -- field index out of range?", field);
     }
 }
 
-void MessageTypeTagDescriptor::setFieldValue(omnetpp::any_ptr object, int field, int i, const omnetpp::cValue& value) const
+void BroadcastLeaderFragmentDescriptor::setFieldValue(omnetpp::any_ptr object, int field, int i, const omnetpp::cValue& value) const
 {
     omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
     if (base) {
@@ -475,15 +565,19 @@ void MessageTypeTagDescriptor::setFieldValue(omnetpp::any_ptr object, int field,
         }
         field -= base->getFieldCount();
     }
-    MessageTypeTag *pp = omnetpp::fromAnyPtr<MessageTypeTag>(object); (void)pp;
+    BroadcastLeaderFragment *pp = omnetpp::fromAnyPtr<BroadcastLeaderFragment>(object); (void)pp;
     switch (field) {
-        case FIELD_isNeighbourMsg: pp->setIsNeighbourMsg(value.boolValue()); break;
-        case FIELD_isHeader: pp->setIsHeader(value.boolValue()); break;
-        default: throw omnetpp::cRuntimeError("Cannot set field %d of class 'MessageTypeTag'", field);
+        case FIELD_source: pp->setSource(omnetpp::checked_int_cast<int>(value.intValue())); break;
+        case FIELD_hop: pp->setHop(omnetpp::checked_int_cast<int>(value.intValue())); break;
+        case FIELD_messageId: pp->setMessageId(omnetpp::checked_int_cast<int>(value.intValue())); break;
+        case FIELD_size: pp->setSize(omnetpp::checked_int_cast<int>(value.intValue())); break;
+        case FIELD_payloadSize: pp->setPayloadSize(omnetpp::checked_int_cast<int>(value.intValue())); break;
+        case FIELD_retransmit: pp->setRetransmit(value.boolValue()); break;
+        default: throw omnetpp::cRuntimeError("Cannot set field %d of class 'BroadcastLeaderFragment'", field);
     }
 }
 
-const char *MessageTypeTagDescriptor::getFieldStructName(int field) const
+const char *BroadcastLeaderFragmentDescriptor::getFieldStructName(int field) const
 {
     omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
     if (base) {
@@ -496,7 +590,7 @@ const char *MessageTypeTagDescriptor::getFieldStructName(int field) const
     };
 }
 
-omnetpp::any_ptr MessageTypeTagDescriptor::getFieldStructValuePointer(omnetpp::any_ptr object, int field, int i) const
+omnetpp::any_ptr BroadcastLeaderFragmentDescriptor::getFieldStructValuePointer(omnetpp::any_ptr object, int field, int i) const
 {
     omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
     if (base) {
@@ -504,13 +598,13 @@ omnetpp::any_ptr MessageTypeTagDescriptor::getFieldStructValuePointer(omnetpp::a
             return base->getFieldStructValuePointer(object, field, i);
         field -= base->getFieldCount();
     }
-    MessageTypeTag *pp = omnetpp::fromAnyPtr<MessageTypeTag>(object); (void)pp;
+    BroadcastLeaderFragment *pp = omnetpp::fromAnyPtr<BroadcastLeaderFragment>(object); (void)pp;
     switch (field) {
         default: return omnetpp::any_ptr(nullptr);
     }
 }
 
-void MessageTypeTagDescriptor::setFieldStructValuePointer(omnetpp::any_ptr object, int field, int i, omnetpp::any_ptr ptr) const
+void BroadcastLeaderFragmentDescriptor::setFieldStructValuePointer(omnetpp::any_ptr object, int field, int i, omnetpp::any_ptr ptr) const
 {
     omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
     if (base) {
@@ -520,9 +614,9 @@ void MessageTypeTagDescriptor::setFieldStructValuePointer(omnetpp::any_ptr objec
         }
         field -= base->getFieldCount();
     }
-    MessageTypeTag *pp = omnetpp::fromAnyPtr<MessageTypeTag>(object); (void)pp;
+    BroadcastLeaderFragment *pp = omnetpp::fromAnyPtr<BroadcastLeaderFragment>(object); (void)pp;
     switch (field) {
-        default: throw omnetpp::cRuntimeError("Cannot set field %d of class 'MessageTypeTag'", field);
+        default: throw omnetpp::cRuntimeError("Cannot set field %d of class 'BroadcastLeaderFragment'", field);
     }
 }
 

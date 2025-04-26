@@ -17,6 +17,14 @@
 #include "inet/linklayer/common/UserPriority.h"
 #include "inet/linklayer/common/UserPriorityTag_m.h"
 
+#include "../LoRa/LoRaTagInfo_m.h"
+#include "../helpers/generalHelpers.h"
+#include "../helpers/MessageTypeTag_m.h"
+
+#include "./BroadcastLeaderFragment_m.h"
+#include "../LoRaMeshRouter/BroadcastFragment_m.h"
+#include "../LoRaMeshRouter/NodeAnnounce_m.h"
+
 namespace rlora {
 
 using namespace inet::physicallayer;
@@ -26,12 +34,7 @@ Define_Module(LoRaCSMA);
 
 LoRaCSMA::~LoRaCSMA()
 {
-    if (endSifs != nullptr)
-        delete static_cast<Packet*>(endSifs->getContextPointer());
-    cancelAndDelete(endSifs);
-    cancelAndDelete(endDifs);
     cancelAndDelete(endBackoff);
-    cancelAndDelete(endAckTimeout);
     cancelAndDelete(endData);
     cancelAndDelete(mediumStateChange);
 }
@@ -71,7 +74,7 @@ void LoRaCSMA::initialize(int stage)
         radioModule->subscribe(IRadio::receptionStateChangedSignal, this);
         radioModule->subscribe(IRadio::transmissionStateChangedSignal, this);
         radioModule->subscribe(LoRaRadio::droppedPacket, this);
-//        radio = check_and_cast<IRadio*>(radioModule);
+        radio = check_and_cast<IRadio*>(radioModule);
         loRaRadio = check_and_cast<LoRaRadio*>(radioModule);
 
         const char *addressString = par("address");
@@ -83,16 +86,17 @@ void LoRaCSMA::initialize(int stage)
             address.setAddress(addressString);
         }
         nodeAnnounce = new cMessage("Node Announce");
-
+        nodeId = intuniform(0, 16777216); //16^6 -1
+//        scheduleAt(intuniform(0, 1000) / 1000.0, nodeAnnounce);
+        packetQueue = CustomPacketQueue();
         // }
 
         // initialize self messages
-        endSifs = new cMessage("SIFS");
-        endDifs = new cMessage("DIFS");
         endBackoff = new cMessage("Backoff");
-        endAckTimeout = new cMessage("AckTimeout");
         endData = new cMessage("Data");
         mediumStateChange = new cMessage("MediumStateChange");
+        transmitSwitchDone = new cMessage("transmitSwitchDone");
+        receptionStated = new cMessage("receptionStated");
 
         // set up internal queue
         txQueue = getQueue(gate(upperLayerInGateId));
@@ -126,12 +130,8 @@ void LoRaCSMA::initialize(int stage)
         WATCH(numReceivedBroadcast);
     }
     else if (stage == INITSTAGE_LINK_LAYER) {
-        // subscribe for the information of the carrier sense
-        radio.reference(this, "radioModule", true);
-//        cModule *radioModule = check_and_cast<cModule*>(radio.get());
-//        radioModule->subscribe(IRadio::receptionStateChangedSignal, this);
-//        radioModule->subscribe(IRadio::transmissionStateChangedSignal, this);
-        radio->setRadioMode(IRadio::RADIO_MODE_RECEIVER);
+        turnOnReceiver();
+        fsm.setState(LISTENING);
     }
 }
 
@@ -170,43 +170,29 @@ void LoRaCSMA::configureNetworkInterface()
  */
 void LoRaCSMA::handleSelfMessage(cMessage *msg)
 {
-    EV << "received self message: " << msg << endl;
     handleWithFsm(msg);
 }
 
 void LoRaCSMA::handleUpperPacket(Packet *packet)
 {
-//    auto destAddress = packet->getTag<MacAddressReq>()->getDestAddress();
-//    ASSERT(!destAddress.isUnspecified());
-//    EV << "frame " << packet << " received from higher layer" << endl;
-//    packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
-
-//    encapsulate(packet);
-//    if (currentTxFrame != nullptr)
-//        throw cRuntimeError("Model error: incomplete transmission exists");
-//    currentTxFrame = packet;
-//    handleWithFsm(currentTxFrame);
-
-    bool isNeighbourMsg = intuniform(0, 100) < 10;
-    createBroadcastPacket(packet->getByteLength(), -1, -1, -1, true, isNeighbourMsg);
+    bool retransmit = intuniform(0, 100) < 100;
+    createBroadcastPacket(packet->getByteLength(), -1, -1, -1, retransmit);
 
     if (currentTxFrame == nullptr) {
         Packet *packetToSend = packetQueue.dequeuePacket();
         currentTxFrame = packetToSend;
     }
     handleWithFsm(packet);
+    delete packet;
 }
 
 void LoRaCSMA::handleLowerPacket(Packet *packet)
 {
-    EV << "received message from lower layer: " << packet << endl;
     handleWithFsm(packet);
 }
 
 void LoRaCSMA::handleWithFsm(cMessage *msg)
 {
-    EV << "is upper layer:" << (msg->getArrivalGateId() == upperLayerInGateId) << endl;
-    EV << "radio reception state:" << radio->getReceptionState() << endl;
     Packet *frame = dynamic_cast<Packet*>(msg);
 
     if (msg == nodeAnnounce) {
@@ -215,22 +201,23 @@ void LoRaCSMA::handleWithFsm(cMessage *msg)
     }
 
     FSMA_Switch(fsm){
-    FSMA_State(IDLE)
+    FSMA_State(SWITCHING)
+    {
+        FSMA_Enter(turnOnReceiver());
+        FSMA_Event_Transition(Listening-Receiving,
+                msg == mediumStateChange,
+                LISTENING,
+        );
+    }
+    FSMA_State(LISTENING)
     {
         FSMA_Event_Transition(Defer-Transmit,
-                isUpperMessage(msg) && !isMediumFree(),
+                currentTxFrame != nullptr && !isMediumFree(),
                 DEFER,
-                EV<<"not free"<<endl;
         );
         FSMA_Event_Transition(Start-Backoff,
-                isUpperMessage(msg) && isMediumFree() && !useAck,
+                currentTxFrame != nullptr && isMediumFree(),
                 BACKOFF,
-                EV<<"going to waitdifs"<<endl;
-        );
-        FSMA_Event_Transition(Start-Difs,
-                isUpperMessage(msg) && isMediumFree() && useAck,
-                WAITDIFS,
-                EV<<"going to waitdifs"<<endl;
         );
         FSMA_Event_Transition(Start-Receive,
                 msg == mediumStateChange && isReceiving(),
@@ -240,45 +227,21 @@ void LoRaCSMA::handleWithFsm(cMessage *msg)
     FSMA_State(DEFER)
     {
         FSMA_Event_Transition(Start-Backoff,
-                msg == mediumStateChange && isMediumFree() && !useAck,
+                msg == mediumStateChange && isMediumFree(),
                 BACKOFF,
-        );
-        FSMA_Event_Transition(Start-Difs,
-                msg == mediumStateChange && isMediumFree() && useAck,
-                WAITDIFS,
         );
         FSMA_Event_Transition(Start-Receive,
                 msg == mediumStateChange && isReceiving(),
                 RECEIVE,
-        );
-    }
-    FSMA_State(WAITDIFS)
-    {
-        FSMA_Enter(scheduleDifsTimer();EV<<"scheduled difs timer"<<endl;);
-        FSMA_Event_Transition(Start-Backoff,
-                msg == endDifs,
-                BACKOFF,
-                EV<<"going to backoff"<<endl;
-        );
-        FSMA_Event_Transition(Start-Receive,
-                msg == mediumStateChange && isReceiving(),
-                RECEIVE,
-                cancelDifsTimer();
-        );
-        FSMA_Event_Transition(Defer-Difs,
-                msg == mediumStateChange && !isMediumFree(),
-                DEFER,
-                cancelDifsTimer();
         );
     }
     FSMA_State(BACKOFF)
     {
-        FSMA_Enter(scheduleBackoffTimer();EV<<"schedule backoff timer"<<endl;);
+        FSMA_Enter(scheduleBackoffTimer());
         FSMA_Event_Transition(Start-Transmit,
                 msg == endBackoff,
                 TRANSMIT,
                 invalidateBackoffPeriod();
-                EV<<"going to transmit"<<endl;
         );
         FSMA_Event_Transition(Start-Receive,
                 msg == mediumStateChange && isReceiving(),
@@ -295,114 +258,42 @@ void LoRaCSMA::handleWithFsm(cMessage *msg)
     }
     FSMA_State(TRANSMIT)
     {
-        FSMA_Enter(EV<<"sending"<<endl;sendDataFrame(getCurrentTransmission()));
-        FSMA_Event_Transition(Transmit-Broadcast,
-                msg == endData && isBroadcast(getCurrentTransmission()),
-                IDLE,
+        FSMA_Enter(radio->setRadioMode(IRadio::RADIO_MODE_TRANSMITTER));
+        FSMA_Event_Transition(Transmit-Listening,
+                msg == transmitSwitchDone,
+                TRANSMIT,
+                sendDataFrame();
+        );
+        FSMA_Event_Transition(Transmit-Listening,
+                msg == endData,
+                SWITCHING,
                 finishCurrentTransmission();
-                numSentBroadcast++;
-        );
-        FSMA_Event_Transition(Transmit-Unicast-No-Ack,
-                msg == endData && !useAck && !isBroadcast(getCurrentTransmission()),
-                IDLE,
-                finishCurrentTransmission();
-                numSent++;
-        );
-        FSMA_Event_Transition(Transmit-Unicast-Use-Ack,
-                msg == endData && useAck && !isBroadcast(getCurrentTransmission()),
-                WAITACK,
-        );
-    }
-    FSMA_State(WAITACK)
-    {
-        FSMA_Enter(scheduleAckTimeout(getCurrentTransmission()));
-        FSMA_Event_Transition(Receive-Ack,
-                isLowerMessage(msg) && isFcsOk(frame) && isForUs(frame) && isAck(frame),
-                IDLE,
-                if (retryCounter == 0) numSentWithoutRetry++;
-                numSent++;
-                cancelAckTimer();
-                finishCurrentTransmission();
-        );
-        FSMA_Event_Transition(Give-Up-Transmission,
-                msg == endAckTimeout && retryCounter == retryLimit,
-                IDLE,
-                giveUpCurrentTransmission();
-        );
-        FSMA_Event_Transition(Retry-Transmission,
-                msg == endAckTimeout,
-                IDLE,
-                retryCurrentTransmission();
         );
     }
     FSMA_State(RECEIVE)
     {
-        FSMA_Event_Transition(Receive-Bit-Error,
-                isLowerMessage(msg) && !isFcsOk(frame),
-                IDLE,
-                numCollision++;
-                emitPacketDropSignal(frame, INCORRECTLY_RECEIVED);
-        );
-        FSMA_Event_Transition(Receive-Unexpected-Ack,
-                isLowerMessage(msg) && isAck(frame),
-                IDLE,
-        );
         FSMA_Event_Transition(Receive-Broadcast,
-                isLowerMessage(msg) && isBroadcast(frame),
-                IDLE,
+                isLowerMessage(msg),
+                LISTENING,
                 decapsulate(frame);
                 handlePacket(frame);
                 numReceivedBroadcast++;
         );
-        FSMA_Event_Transition(Receive-Unicast-No-Ack,
-                isLowerMessage(msg) && isForUs(frame) && !useAck,
-                IDLE,
-                decapsulate(frame);
-                handlePacket(frame);
-                numReceived++;
-        );
-        FSMA_Event_Transition(Receive-Unicast-Use-Ack,
-                isLowerMessage(msg) && isForUs(frame) && useAck,
-                WAITSIFS,
-                auto frameCopy = frame->dup();
-                decapsulate(frameCopy);
-                handlePacket(frameCopy);
-                numReceived++;
-        );
-        FSMA_Event_Transition(Receive-Unicast-Not-For-Us,
-                isLowerMessage(msg) && !isForUs(frame),
-                IDLE,
-                emitPacketDropSignal(frame, NOT_ADDRESSED_TO_US, retryLimit);
-        );
-    }
-    FSMA_State(WAITSIFS)
-    {
-        FSMA_Enter(scheduleSifsTimer(frame));
-        FSMA_Event_Transition(Transmit-Ack,
-                msg == endSifs,
-                IDLE,
-                sendAckFrame();
-        );
     }
 }
-    if (fsm.getState() == IDLE) {
+    if (fsm.getState() == LISTENING) {
         if (isReceiving())
             handleWithFsm(mediumStateChange);
-//        else if (currentTxFrame != nullptr)
-//            handleWithFsm(currentTxFrame);
-//        else if (!txQueue->isEmpty()) {
-//            processUpperPacket();
-//        }
-        else if (currentTxFrame != nullptr) {
+        else if (currentTxFrame != nullptr && isMediumFree()) {
             handleWithFsm(currentTxFrame);
         }
-        else if (!packetQueue.isEmpty()) {
+        else if (!packetQueue.isEmpty() && isMediumFree()) {
             currentTxFrame = packetQueue.dequeuePacket();
             handleWithFsm(currentTxFrame);
         }
     }
-    if (isLowerMessage(msg) && frame->getOwner() == this && endSifs->getContextPointer() != frame)
-        delete frame;
+//    if (isLowerMessage(msg) && frame->getOwner() == this && endSifs->getContextPointer() != frame)
+//        delete frame;
     getDisplayString().setTagArg("t", 0, fsm.getStateName());
 }
 
@@ -410,13 +301,29 @@ void LoRaCSMA::receiveSignal(cComponent *source, simsignal_t signalID, intval_t 
 {
     Enter_Method("%s", cComponent::getSignalName(signalID));
 
-    if (signalID == IRadio::receptionStateChangedSignal)
-        handleWithFsm(mediumStateChange);
+    if (signalID == IRadio::receptionStateChangedSignal) {
+        IRadio::ReceptionState newRadioReceptionState = (IRadio::ReceptionState) value;
+        // just switching from transmitter to receiver
+        if (receptionState == IRadio::RECEPTION_STATE_UNDEFINED && newRadioReceptionState == IRadio::RECEPTION_STATE_IDLE) {
+            receptionState = newRadioReceptionState;
+            handleWithFsm(mediumStateChange);
+        }
+        if (receptionState == IRadio::RECEPTION_STATE_IDLE && newRadioReceptionState == IRadio::RECEPTION_STATE_RECEIVING) {
+            receptionState = newRadioReceptionState;
+            handleWithFsm(receptionStated);
+        }
+        receptionState = newRadioReceptionState;
+    }
     else if (signalID == IRadio::transmissionStateChangedSignal) {
-        IRadio::TransmissionState newRadioTransmissionState = static_cast<IRadio::TransmissionState>(value);
+        IRadio::TransmissionState newRadioTransmissionState = (IRadio::TransmissionState) value;
         if (transmissionState == IRadio::TRANSMISSION_STATE_TRANSMITTING && newRadioTransmissionState == IRadio::TRANSMISSION_STATE_IDLE) {
+            transmissionState = newRadioTransmissionState;
             handleWithFsm(endData);
-            radio->setRadioMode(IRadio::RADIO_MODE_RECEIVER);
+        }
+
+        if (transmissionState == IRadio::TRANSMISSION_STATE_UNDEFINED && newRadioTransmissionState == IRadio::TRANSMISSION_STATE_IDLE) {
+            transmissionState = newRadioTransmissionState;
+            handleWithFsm(transmitSwitchDone);
         }
         transmissionState = newRadioTransmissionState;
     }
@@ -424,12 +331,6 @@ void LoRaCSMA::receiveSignal(cComponent *source, simsignal_t signalID, intval_t 
 
 void LoRaCSMA::encapsulate(Packet *msg)
 {
-    auto macTrailer = makeShared<CsmaCaMacTrailer>();
-    macTrailer->setFcsMode(fcsMode);
-    if (fcsMode == FCS_COMPUTED)
-        macTrailer->setFcs(computeFcs(msg->peekAllAsBytes()));
-    msg->insertAtBack(macTrailer);
-
     auto macFrame = makeShared<LoRaMacFrame>();
     macFrame->setChunkLength(B(0));
     msg->setArrival(msg->getArrivalModuleId(), msg->getArrivalGateId());
@@ -466,36 +367,6 @@ void LoRaCSMA::decapsulate(Packet *frame)
 /****************************************************************
  * Timer functions.
  */
-void LoRaCSMA::scheduleSifsTimer(Packet *frame)
-{
-    EV << "scheduling SIFS timer\n";
-    endSifs->setContextPointer(frame);
-    scheduleAfter(sifsTime, endSifs);
-}
-
-void LoRaCSMA::scheduleDifsTimer()
-{
-    EV << "scheduling DIFS timer\n";
-    scheduleAfter(difsTime, endDifs);
-}
-
-void LoRaCSMA::cancelDifsTimer()
-{
-    EV << "canceling DIFS timer\n";
-    cancelEvent(endDifs);
-}
-
-void LoRaCSMA::scheduleAckTimeout(Packet *frameToSend)
-{
-    EV << "scheduling ACK timeout\n";
-    scheduleAfter(ackTimeout, endAckTimeout);
-}
-
-void LoRaCSMA::cancelAckTimer()
-{
-    EV << "canceling ACK timer\n";
-    cancelEvent(endAckTimeout);
-}
 
 void LoRaCSMA::invalidateBackoffPeriod()
 {
@@ -510,7 +381,6 @@ bool LoRaCSMA::isInvalidBackoffPeriod()
 void LoRaCSMA::generateBackoffPeriod()
 {
     ASSERT(0 <= retryCounter && retryCounter <= retryLimit);
-    EV << "generating backoff slot number for retry: " << retryCounter << endl;
     int cw;
     // wir sind zwar immer multicast aber wir berechnen normales contention window
 //    if (getCurrentTransmission()->peekAtFront<CsmaCaMacHeader>()->getReceiverAddress().isMulticast())
@@ -518,10 +388,8 @@ void LoRaCSMA::generateBackoffPeriod()
 //    else
     cw = std::min(cwMax, (cwMin + 1) * (1 << retryCounter) - 1);
     int slots = intrand(cw + 1);
-    EV << "generated backoff slot number: " << slots << " , cw: " << cw << endl;
     backoffPeriod = slots * slotTime;
     ASSERT(backoffPeriod >= 0);
-    EV << "backoff period set to " << backoffPeriod << endl;
 }
 
 void LoRaCSMA::decreaseBackoffPeriod()
@@ -529,12 +397,10 @@ void LoRaCSMA::decreaseBackoffPeriod()
     simtime_t elapsedBackoffTime = simTime() - endBackoff->getSendingTime();
     backoffPeriod -= ((int) (elapsedBackoffTime / slotTime)) * slotTime;
     ASSERT(backoffPeriod >= 0);
-    EV << "backoff period decreased to " << backoffPeriod << endl;
 }
 
 void LoRaCSMA::scheduleBackoffTimer()
 {
-    EV << "scheduling backoff timer\n";
     if (isInvalidBackoffPeriod())
         generateBackoffPeriod();
     scheduleAfter(backoffPeriod, endBackoff);
@@ -542,43 +408,22 @@ void LoRaCSMA::scheduleBackoffTimer()
 
 void LoRaCSMA::cancelBackoffTimer()
 {
-    EV << "canceling backoff timer\n";
     cancelEvent(endBackoff);
 }
 
 /****************************************************************
  * Frame sender functions.
  */
-void LoRaCSMA::sendDataFrame(Packet *frameToSend)
+void LoRaCSMA::sendDataFrame()
 {
-    EV << "sending Data frame " << frameToSend->getName() << endl;
-    radio->setRadioMode(IRadio::RADIO_MODE_TRANSMITTER);
-    sendDown(frameToSend->dup());
-}
-
-void LoRaCSMA::sendAckFrame()
-{
-    EV << "sending Ack frame\n";
-    auto frameToAck = static_cast<Packet*>(endSifs->getContextPointer());
-    endSifs->setContextPointer(nullptr);
-    auto macHeader = makeShared<CsmaCaMacAckHeader>();
-    macHeader->setChunkLength(ackLength);
-    macHeader->setHeaderLengthField(B(ackLength).get());
-    macHeader->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
-    auto frame = new Packet("CsmaAck");
-    frame->insertAtFront(macHeader);
-    auto macTrailer = makeShared<CsmaCaMacTrailer>();
-    macTrailer->setFcsMode(fcsMode);
-    if (fcsMode == FCS_COMPUTED)
-        macTrailer->setFcs(computeFcs(frame->peekAllAsBytes()));
-    frame->insertAtBack(macTrailer);
-    auto macAddressInd = frame->addTag<MacAddressInd>();
-    macAddressInd->setSrcAddress(macHeader->getTransmitterAddress());
-    macAddressInd->setDestAddress(macHeader->getReceiverAddress());
-    frame->addTag<PacketProtocolTag>()->setProtocol(&Protocol::csmaCaMac);
-    radio->setRadioMode(IRadio::RADIO_MODE_TRANSMITTER);
-    sendDown(frame);
-    delete frameToAck;
+//    radio->setRadioMode(IRadio::RADIO_MODE_TRANSMITTER);
+//    sendDown(frameToSend->dup());
+    auto frameToSend = getCurrentTransmission();
+    if (frameToSend != nullptr) {
+        sendDown(frameToSend->dup());
+    }
+    frameToSend = nullptr;
+    delete frameToSend;
 }
 
 /****************************************************************
@@ -588,24 +433,6 @@ void LoRaCSMA::finishCurrentTransmission()
 {
     deleteCurrentTxFrame();
     resetTransmissionVariables();
-}
-
-void LoRaCSMA::giveUpCurrentTransmission()
-{
-    auto packet = getCurrentTransmission();
-    emitPacketDropSignal(packet, RETRY_LIMIT_REACHED, retryLimit);
-    emit(linkBrokenSignal, packet);
-    deleteCurrentTxFrame();
-    resetTransmissionVariables();
-    numGivenUp++;
-}
-
-void LoRaCSMA::retryCurrentTransmission()
-{
-    ASSERT(retryCounter < retryLimit);
-    retryCounter++;
-    numRetry++;
-    generateBackoffPeriod();
 }
 
 Packet* LoRaCSMA::getCurrentTransmission()
@@ -638,63 +465,6 @@ bool LoRaCSMA::isReceiving()
     return radio->getReceptionState() == IRadio::RECEPTION_STATE_RECEIVING;
 }
 
-bool LoRaCSMA::isAck(Packet *frame)
-{
-    return false;
-    const auto &macHeader = frame->peekAtFront<CsmaCaMacHeader>();
-    return macHeader->getType() == CSMA_ACK;
-}
-
-bool LoRaCSMA::isBroadcast(Packet *frame)
-{
-    return true;
-    const auto &macHeader = frame->peekAtFront<CsmaCaMacHeader>();
-    return macHeader->getReceiverAddress().isBroadcast();
-}
-
-bool LoRaCSMA::isForUs(Packet *frame)
-{
-    return false;
-    const auto &macHeader = frame->peekAtFront<CsmaCaMacHeader>();
-    return macHeader->getReceiverAddress() == networkInterface->getMacAddress();
-}
-
-bool LoRaCSMA::isFcsOk(Packet *frame)
-{
-    if (frame->hasBitError() || !frame->peekData()->isCorrect())
-        return false;
-    else {
-        const auto &trailer = frame->peekAtBack<CsmaCaMacTrailer>(B(4));
-        switch (trailer->getFcsMode()) {
-            case FCS_DECLARED_INCORRECT:
-                return false;
-            case FCS_DECLARED_CORRECT:
-                return true;
-            case FCS_COMPUTED: {
-                const auto &fcsBytes = frame->peekDataAt<BytesChunk>(B(0), frame->getDataLength() - trailer->getChunkLength());
-                auto bufferLength = B(fcsBytes->getChunkLength()).get();
-                auto buffer = new uint8_t[bufferLength];
-                fcsBytes->copyToBuffer(buffer, bufferLength);
-                auto computedFcs = ethernetCRC(buffer, bufferLength);
-                delete[] buffer;
-                return computedFcs == trailer->getFcs();
-            }
-            default:
-                throw cRuntimeError("Unknown FCS mode");
-        }
-    }
-}
-
-uint32_t LoRaCSMA::computeFcs(const Ptr<const BytesChunk> &bytes)
-{
-    auto bufferLength = B(bytes->getChunkLength()).get();
-    auto buffer = new uint8_t[bufferLength];
-    bytes->copyToBuffer(buffer, bufferLength);
-    auto computedFcs = ethernetCRC(buffer, bufferLength);
-    delete[] buffer;
-    return computedFcs;
-}
-
 void LoRaCSMA::handleStopOperation(LifecycleOperation *operation)
 {
     MacProtocolBase::handleStopOperation(operation);
@@ -720,10 +490,6 @@ queueing::IPassivePacketSource* LoRaCSMA::getProvider(cGate *gate)
 
 void LoRaCSMA::handleCanPullPacketChanged(cGate *gate)
 {
-//    Enter_Method("handleCanPullPacketChanged");
-//    if (fsm.getState() == IDLE && !txQueue->isEmpty()) {
-//        processUpperPacket();
-//    }
     Enter_Method("handleCanPullPacketChanged");
     Packet *packet = dequeuePacket();
     handleUpperMessage(packet);
@@ -740,48 +506,59 @@ MacAddress LoRaCSMA::getAddress()
     return address;
 }
 
-// todo: adjust for csma
-void LoRaCSMA::createBroadcastPacket(int packetSize, int messageId, int hopId, int source, bool retransmit, bool isNeighbourMsg)
+void LoRaCSMA::createBroadcastPacket(int packetSize, int messageId, int hopId, int source, bool retransmit)
 {
-    auto headerPaket = new Packet("BroadcastHeaderPkt");
-    auto headerPayload = makeShared<BroadcastHeader>();
+    auto headerPaket = new Packet("BroadcastLeaderFragment");
+    auto headerPayload = makeShared<BroadcastLeaderFragment>();
 
     if (messageId == -1) {
-        int messageId = headerPaket->getId();
+        messageId = headerPaket->getId();
     }
     if (hopId == -1) {
-        int hopId = nodeId;
+        hopId = nodeId;
     }
     if (source == -1) {
-        int source = nodeId;
+        source = nodeId;
     }
-
-    headerPayload->setChunkLength(B(BROADCAST_HEADER_SIZE));
     headerPayload->setSize(packetSize);
+    if (packetSize + BROADCAST_LEADER_FRAGMENT_META_SIZE > 255) {
+        headerPayload->setChunkLength(B(255));
+        headerPayload->setPayloadSize(255 - BROADCAST_LEADER_FRAGMENT_META_SIZE);
+        packetSize = packetSize - (255 - BROADCAST_LEADER_FRAGMENT_META_SIZE);
+    }
+    else {
+        headerPayload->setChunkLength(B(packetSize + BROADCAST_LEADER_FRAGMENT_META_SIZE));
+        headerPayload->setPayloadSize(packetSize);
+        packetSize = 0;
+    }
     headerPayload->setMessageId(messageId);
     headerPayload->setSource(source);
     headerPayload->setHop(hopId);
     headerPayload->setRetransmit(retransmit);
     headerPaket->insertAtBack(headerPayload);
     headerPaket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
-    headerPaket->addTagIfAbsent<MessageTypeTag>()->setIsNeighbourMsg(isNeighbourMsg);
-    auto headerEncap = encapsulate(headerPaket);
-    packetQueue.enqueuePacket(headerEncap, true);
-    waitTimeMap[headerEncap->getId()] = 150;
+    auto messageTypeTag = headerPaket->addTagIfAbsent<MessageTypeTag>();
+    messageTypeTag->setIsNeighbourMsg(!retransmit);
+    messageTypeTag->setIsHeader(false);
 
-    int i = 0;
+    encapsulate(headerPaket);
+
+    packetQueue.enqueuePacket(headerPaket, true);
+
+    // INFO: das nullte packet ist das was im leader direkt mitgeschickt wird
+    int i = 1;
     while (packetSize > 0) {
         auto fragmentPacket = new Packet("BroadcastFragmentPkt");
         auto fragmentPayload = makeShared<BroadcastFragment>();
 
         if (packetSize + BROADCAST_FRAGMENT_META_SIZE > 255) {
             fragmentPayload->setChunkLength(B(255));
-            fragmentPayload->setSize(255 - BROADCAST_FRAGMENT_META_SIZE);
+            fragmentPayload->setPayloadSize(255 - BROADCAST_FRAGMENT_META_SIZE);
             packetSize = packetSize - (255 - BROADCAST_FRAGMENT_META_SIZE);
         }
         else {
             fragmentPayload->setChunkLength(B(packetSize + BROADCAST_FRAGMENT_META_SIZE));
-            fragmentPayload->setSize(packetSize);
+            fragmentPayload->setPayloadSize(packetSize);
             packetSize = 0;
         }
 
@@ -790,14 +567,13 @@ void LoRaCSMA::createBroadcastPacket(int packetSize, int messageId, int hopId, i
         fragmentPayload->setFragment(i++);
         fragmentPacket->insertAtBack(fragmentPayload);
         fragmentPacket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
-        fragmentPacket->addTagIfAbsent<MessageTypeTag>()->setIsNeighbourMsg(isNeighbourMsg);
+        auto messageTypeTag = fragmentPacket->addTagIfAbsent<MessageTypeTag>();
+        messageTypeTag->setIsNeighbourMsg(!retransmit);
+        messageTypeTag->setIsHeader(false);
 
-        auto fragmentEncap = encapsulate(fragmentPacket);
-        packetQueue.enqueuePacket(fragmentEncap);
+        encapsulate(fragmentPacket);
+        packetQueue.enqueuePacket(fragmentPacket);
 
-        if (packetSize == 0) {
-            waitTimeMap[fragmentEncap->getId()] = 50 + 270 + intuniform(0, 50);
-        }
     }
 }
 
@@ -813,32 +589,26 @@ void LoRaCSMA::announceNodeId(int respond)
     nodeAnnouncePacket->insertAtBack(nodeAnnouncePayload);
     nodeAnnouncePacket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
     nodeAnnouncePacket->addTagIfAbsent<MessageTypeTag>()->setIsNeighbourMsg(false);
-    auto fragmentEncap = encapsulate(nodeAnnouncePacket);
-    // todo: packet in front
-    packetQueue.enqueuePacket(fragmentEncap);
+    encapsulate(nodeAnnouncePacket);
+    packetQueue.enqueuePacketAtPosition(nodeAnnouncePacket, 0);
 }
 
 void LoRaCSMA::handlePacket(Packet *packet)
 {
-
-    Packet *messageFrame = decapsulate(packet);
-    auto chunk = messageFrame->peekAtFront<inet::Chunk>();
-
+    auto chunk = packet->peekAtFront<inet::Chunk>();
     if (auto msg = dynamic_cast<const NodeAnnounce*>(chunk.get())) {
         EV << "Received NodeAnnounce" << endl;
-        // einfach kopirt aus Julians implementierung
+        // einfach kopiert aus Julians implementierung
         if (nodeId != msg->getNodeId()) {
 
             if (msg->getRespond() == 1) {
-                // Unknown node! Block Sending for a time window, to allow other Nodes to respond.
-                senderWaitDelay(0 + intuniform(0, 450));
                 announceNodeId(0);
             }
         }
 
     }
-    else if (auto msg = dynamic_cast<const BroadcastHeader*>(chunk.get())) {
-        EV << "Received BroadcastHeader" << endl;
+    else if (auto msg = dynamic_cast<const BroadcastLeaderFragment*>(chunk.get())) {
+        EV << "Received BroadcastLeaderFragment" << endl;
         int messageId = msg->getMessageId();
         int source = msg->getSource();
         if (incompletePacketList.getById(messageId) != nullptr) {
@@ -866,18 +636,29 @@ void LoRaCSMA::handlePacket(Packet *packet)
         incompletePacketList.add(incompletePacket);
         latestMessageIdMap.updateMessageId(source, messageId);
 
-        int size = msg->getSize();
-        int waitTime = 20 + predictSendTime(size);
-        senderWaitDelay(waitTime);
+        // wir senden schon mit dem ersten packet daten
+        BroadcastFragment *fragmentPayload = new BroadcastFragment();
+        fragmentPayload->setChunkLength(msg->getChunkLength());
+        fragmentPayload->setPayloadSize(msg->getPayloadSize());
+        fragmentPayload->setMessageId(messageId);
+        fragmentPayload->setSource(source);
+        fragmentPayload->setFragment(0);
 
+        Result result = incompletePacketList.addToIncompletePacket(fragmentPayload);
+
+        if (result.isComplete) {
+            if (result.sendUp) {
+                cMessage *readyMsg = new cMessage("Ready");
+                sendUp(readyMsg);
+                retransmitPacket(result.completePacket);
+            }
+            incompletePacketList.removeById(msg->getMessageId());
+        }
+        delete fragmentPayload;
     }
     else if (auto msg = dynamic_cast<const BroadcastFragment*>(chunk.get())) {
         EV << "Received BroadcastFragment" << endl;
         Result result = incompletePacketList.addToIncompletePacket(msg);
-
-        if (result.waitTime >= 0) {
-            senderWaitDelay(result.waitTime);
-        }
 
         if (result.isComplete) {
             if (result.sendUp) {
@@ -888,16 +669,27 @@ void LoRaCSMA::handlePacket(Packet *packet)
             incompletePacketList.removeById(msg->getMessageId());
         }
     }
-    else if (auto msg = dynamic_cast<const BroadcastAck*>(chunk.get())) {
-        EV << "Received BroadcastAck" << endl;
-        // we are by design not sending any acks so we dont receive any acks
-
-    }
     else {
-        throw cRuntimeError("Received Unknown message");
+        throw cRuntimeError("Received Unknown message: ");
 
     }
     delete packet;
+}
+
+void LoRaCSMA::retransmitPacket(FragmentedPacket fragmentedPacket)
+{
+    if (!fragmentedPacket.retransmit || fragmentedPacket.sourceNode == nodeId) {
+        return;
+    }
+    // jedes feld muss gleich sein vom fragemntierten packet außer lastHop
+    createBroadcastPacket(fragmentedPacket.size, fragmentedPacket.messageId, nodeId, fragmentedPacket.sourceNode, fragmentedPacket.retransmit);
+}
+
+void LoRaCSMA::turnOnReceiver()
+{
+    LoRaRadio *loraRadio;
+    loraRadio = check_and_cast<LoRaRadio*>(radio);
+    loraRadio->setRadioMode(IRadio::RADIO_MODE_RECEIVER);
 }
 
 } /* namespace rlora */

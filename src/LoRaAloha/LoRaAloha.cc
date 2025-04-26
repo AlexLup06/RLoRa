@@ -1,21 +1,19 @@
 //
-// Copyright (C) 2016 OpenSim Ltd.
-//
-// This program is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Lesser General Public License
-// as published by the Free Software Foundation; either version 2
-// of the License, or (at your option) any later version.
-//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+// 
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU Lesser General Public License for more details.
-//
+// 
 // You should have received a copy of the GNU Lesser General Public License
-// along with this program; if not, see <http://www.gnu.org/licenses/>.
-//
+// along with this program.  If not, see http://www.gnu.org/licenses/.
+// 
 
-#include "LoRaMeshRouter.h"
+#include "LoRaAloha.h"
 
 #include "inet/common/ModuleAccess.h"
 #include "inet/linklayer/common/Ieee802Ctrl.h"
@@ -30,23 +28,22 @@
 #include "../helpers/generalHelpers.h"
 #include "../helpers/MessageTypeTag_m.h"
 
-#include "BroadcastAck_m.h"
-#include "BroadcastFragment_m.h"
-#include "BroadcastHeader_m.h"
-#include "NodeAnnounce_m.h"
+#include "../LoRaMeshRouter/BroadcastFragment_m.h"
+#include "../LoRaMeshRouter/NodeAnnounce_m.h"
+#include "../LoRaCSMA/BroadcastLeaderFragment_m.h"
 
 namespace rlora {
 
-Define_Module(LoRaMeshRouter);
+Define_Module(LoRaAloha);
 
-LoRaMeshRouter::~LoRaMeshRouter()
+LoRaAloha::~LoRaAloha()
 {
 }
 
 /****************************************************************
  * Initialization functions.
  */
-void LoRaMeshRouter::initialize(int stage)
+void LoRaAloha::initialize(int stage)
 {
     MacProtocolBase::initialize(stage);
     if (stage == INITSTAGE_LOCAL) {
@@ -73,7 +70,6 @@ void LoRaMeshRouter::initialize(int stage)
         mediumStateChange = new cMessage("MediumStateChange");
         droppedPacket = new cMessage("Dropped Packet");
         endTransmission = new cMessage("End Transmission");
-        waitDelay = new cMessage("Wait Delay");
         nodeAnnounce = new cMessage("Node Announce");
         transmitSwitchDone = new cMessage("transmitSwitchDone");
         receptionStated = new cMessage("receptionStated");
@@ -81,21 +77,22 @@ void LoRaMeshRouter::initialize(int stage)
         throughputSignal = registerSignal("throughputBps");
         effectiveThroughputSignal = registerSignal("effectiveThroughputBps");
         throughputTimer = new cMessage("throughputTimer");
-        scheduleAt(simTime() + measurementInterval, throughputTimer);
+//        scheduleAt(simTime() + measurementInterval, throughputTimer);
+
 
 //        scheduleAt(intuniform(0, 1000) / 1000.0, nodeAnnounce);
     }
     else if (stage == INITSTAGE_LINK_LAYER) {
         turnOnReceiver();
-        fsm.setState(LISTENING);
+        fsm.setState(LISTENING); // We are always in Listening state
     }
 }
 
-void LoRaMeshRouter::finish()
+void LoRaAloha::finish()
 {
 }
 
-void LoRaMeshRouter::configureNetworkInterface()
+void LoRaAloha::configureNetworkInterface()
 {
     // data rate
     networkInterface->setDatarate(bitrate);
@@ -111,19 +108,14 @@ void LoRaMeshRouter::configureNetworkInterface()
 /****************************************************************
  * Message handling functions.
  */
-void LoRaMeshRouter::handleSelfMessage(cMessage *msg)
+void LoRaAloha::handleSelfMessage(cMessage *msg)
 {
     handleWithFsm(msg);
 }
 
-/**
- * For "serial" messages that we receive from the App (Host Application), we put a BroadcastHeader and
- * as many BroadcastFragments as needed in the packetQueue. If such a BroadcastPacket already exists, we just update that one
- * If there is no currentTxFrame - basically the next packet to send - we pull the next packet from the Queue and set it to currentTxFrame
- * If we are free to send handleWithFsm will send, otherwise handleWithFsm just does nothing
- */
-void LoRaMeshRouter::handleUpperPacket(Packet *packet)
+void LoRaAloha::handleUpperPacket(Packet *packet)
 {
+    // add header to queue
     bool retransmit = intuniform(0, 99) < 100;
     createBroadcastPacket(packet->getByteLength(), -1, -1, -1, retransmit);
 
@@ -135,7 +127,7 @@ void LoRaMeshRouter::handleUpperPacket(Packet *packet)
     delete packet;
 }
 
-void LoRaMeshRouter::handleLowerPacket(Packet *msg)
+void LoRaAloha::handleLowerPacket(Packet *msg)
 {
     if (fsm.getState() == RECEIVING) {
         handleWithFsm(msg);
@@ -146,7 +138,7 @@ void LoRaMeshRouter::handleLowerPacket(Packet *msg)
     }
 }
 
-queueing::IPassivePacketSource* LoRaMeshRouter::getProvider(cGate *gate)
+queueing::IPassivePacketSource* LoRaAloha::getProvider(cGate *gate)
 {
     return (gate->getId() == upperLayerInGateId) ? txQueue.get() : nullptr;
 }
@@ -160,20 +152,20 @@ queueing::IPassivePacketSource* LoRaMeshRouter::getProvider(cGate *gate)
  *
  * The gate parameter must be a valid gate of this module.
  */
-void LoRaMeshRouter::handleCanPullPacketChanged(cGate *gate)
+void LoRaAloha::handleCanPullPacketChanged(cGate *gate)
 {
     Enter_Method("handleCanPullPacketChanged");
     Packet *packet = dequeuePacket();
     handleUpperMessage(packet);
 }
 
-void LoRaMeshRouter::handlePullPacketProcessed(Packet *packet, cGate *gate, bool successful)
+void LoRaAloha::handlePullPacketProcessed(Packet *packet, cGate *gate, bool successful)
 {
     Enter_Method("handlePullPacketProcessed");
     throw cRuntimeError("Not supported callback");
 }
 
-void LoRaMeshRouter::handleWithFsm(cMessage *msg)
+void LoRaAloha::handleWithFsm(cMessage *msg)
 {
     Ptr<LoRaMacFrame> frame = nullptr;
     auto pkt = dynamic_cast<Packet*>(msg);
@@ -212,12 +204,7 @@ void LoRaMeshRouter::handleWithFsm(cMessage *msg)
         );
 
         FSMA_Event_Transition(Listening-Transmitting_1,
-                currentTxFrame!=nullptr && !waitDelay->isScheduled() && !isReceiving(),
-                TRANSMITING,
-        );
-
-        FSMA_Event_Transition(Listening-Transmitting_1,
-                msg == waitDelay && currentTxFrame != nullptr,
+                currentTxFrame!=nullptr && !isReceiving(),
                 TRANSMITING,
         );
     }
@@ -251,7 +238,7 @@ void LoRaMeshRouter::handleWithFsm(cMessage *msg)
     }
 }
 
-    if (fsm.getState() == LISTENING && receptionState == IRadio::RECEPTION_STATE_IDLE && !waitDelay->isScheduled()) {
+    if (fsm.getState() == LISTENING && receptionState == IRadio::RECEPTION_STATE_IDLE) {
         if (currentTxFrame != nullptr) {
             handleWithFsm(currentTxFrame);
         }
@@ -272,7 +259,7 @@ void LoRaMeshRouter::handleWithFsm(cMessage *msg)
  *
  *  Je nachdem was wir erhalten haben machen wir etwas anderes
  */
-void LoRaMeshRouter::handlePacket(Packet *packet)
+void LoRaAloha::handlePacket(Packet *packet)
 {
     bytesReceivedInInterval += packet->getByteLength();
     Packet *messageFrame = decapsulate(packet);
@@ -285,14 +272,16 @@ void LoRaMeshRouter::handlePacket(Packet *packet)
 
             if (msg->getRespond() == 1) {
                 // Unknown node! Block Sending for a time window, to allow other Nodes to respond.
-                senderWaitDelay(0 + intuniform(0, 450));
                 announceNodeId(0);
             }
         }
 
     }
-    else if (auto msg = dynamic_cast<const BroadcastHeader*>(chunk.get())) {
-        EV << "Received BroadcastHeader" << endl;
+    else if (auto msg = dynamic_cast<const BroadcastLeaderFragment*>(chunk.get())) {
+        EV << "Received BroadcastLeaderFragment" << endl;
+
+        effectiveBytesReceivedInInterval += packet->getByteLength() - BROADCAST_LEADER_FRAGMENT_META_SIZE;
+
         int messageId = msg->getMessageId();
         int source = msg->getSource();
         if (incompletePacketList.getById(messageId) != nullptr) {
@@ -320,9 +309,25 @@ void LoRaMeshRouter::handlePacket(Packet *packet)
         incompletePacketList.add(incompletePacket);
         latestMessageIdMap.updateMessageId(source, messageId);
 
-        int size = msg->getSize();
-        int waitTime = 20 + predictSendTime(size);
-        senderWaitDelay(waitTime);
+        // wir senden schon mit dem ersten packet daten
+        BroadcastFragment *fragmentPayload = new BroadcastFragment();
+        fragmentPayload->setChunkLength(msg->getChunkLength());
+        fragmentPayload->setPayloadSize(msg->getPayloadSize());
+        fragmentPayload->setMessageId(messageId);
+        fragmentPayload->setSource(source);
+        fragmentPayload->setFragment(0);
+
+        Result result = incompletePacketList.addToIncompletePacket(fragmentPayload);
+
+        if (result.isComplete) {
+            if (result.sendUp) {
+                cMessage *readyMsg = new cMessage("Ready");
+                sendUp(readyMsg);
+                retransmitPacket(result.completePacket);
+            }
+            incompletePacketList.removeById(msg->getMessageId());
+        }
+        delete fragmentPayload;
 
     }
     else if (auto msg = dynamic_cast<const BroadcastFragment*>(chunk.get())) {
@@ -330,10 +335,6 @@ void LoRaMeshRouter::handlePacket(Packet *packet)
         Result result = incompletePacketList.addToIncompletePacket(msg);
 
         effectiveBytesReceivedInInterval += packet->getByteLength() - BROADCAST_FRAGMENT_META_SIZE;
-
-        if (result.waitTime >= 0) {
-            senderWaitDelay(result.waitTime);
-        }
 
         if (result.isComplete) {
             if (result.sendUp) {
@@ -344,10 +345,6 @@ void LoRaMeshRouter::handlePacket(Packet *packet)
             incompletePacketList.removeById(msg->getMessageId());
         }
     }
-    else if (auto msg = dynamic_cast<const BroadcastAck*>(chunk.get())) {
-        EV << "Received BroadcastAck" << endl;
-        // we are by design not sending any acks so we dont receive any acks
-    }
     else {
         throw cRuntimeError("Received Unknown message");
 
@@ -355,8 +352,7 @@ void LoRaMeshRouter::handlePacket(Packet *packet)
     delete packet;
 }
 
-// as a receiver we are not changing state of radio but only of receiver part
-void LoRaMeshRouter::receiveSignal(cComponent *source, simsignal_t signalID, intval_t value, cObject *details)
+void LoRaAloha::receiveSignal(cComponent *source, simsignal_t signalID, intval_t value, cObject *details)
 {
     Enter_Method_Silent();
     if (signalID == IRadio::receptionStateChangedSignal) {
@@ -391,7 +387,7 @@ void LoRaMeshRouter::receiveSignal(cComponent *source, simsignal_t signalID, int
     }
 }
 
-Packet* LoRaMeshRouter::encapsulate(Packet *msg)
+Packet* LoRaAloha::encapsulate(Packet *msg)
 {
     auto frame = makeShared<LoRaMacFrame>();
     frame->setChunkLength(B(0));
@@ -420,7 +416,7 @@ Packet* LoRaMeshRouter::encapsulate(Packet *msg)
     return msg;
 }
 
-Packet* LoRaMeshRouter::decapsulate(Packet *frame)
+Packet* LoRaAloha::decapsulate(Packet *frame)
 {
     auto loraHeader = frame->popAtFront<LoRaMacFrame>();
     frame->addTagIfAbsent<MacAddressInd>()->setSrcAddress(loraHeader->getTransmitterAddress());
@@ -433,34 +429,29 @@ Packet* LoRaMeshRouter::decapsulate(Packet *frame)
 /****************************************************************
  * Frame sender functions. send to Radio
  */
-void LoRaMeshRouter::sendDataFrame()
+void LoRaAloha::sendDataFrame()
 {
     auto frameToSend = getCurrentTransmission();
-    if (frameToSend != nullptr) {
-        int waitTime = waitTimeMap[frameToSend->getId()];
-
-        senderWaitDelay(waitTime);
-        sendDown(frameToSend);
-    }
+    sendDown(frameToSend);
 }
 
 /****************************************************************
  * Helper functions.
  */
-void LoRaMeshRouter::finishCurrentTransmission()
+void LoRaAloha::finishCurrentTransmission()
 {
     if (currentTxFrame != nullptr) {
         currentTxFrame = nullptr;
     }
 }
 
-Packet* LoRaMeshRouter::getCurrentTransmission()
+Packet* LoRaAloha::getCurrentTransmission()
 {
     ASSERT(currentTxFrame != nullptr);
     return currentTxFrame;
 }
 
-void LoRaMeshRouter::retransmitPacket(FragmentedPacket fragmentedPacket)
+void LoRaAloha::retransmitPacket(FragmentedPacket fragmentedPacket)
 {
     // jedes feld muss gleich sein vom fragemntierten packet außer lastHop
     if (!fragmentedPacket.retransmit || fragmentedPacket.sourceNode == nodeId) {
@@ -469,12 +460,10 @@ void LoRaMeshRouter::retransmitPacket(FragmentedPacket fragmentedPacket)
     createBroadcastPacket(fragmentedPacket.size, fragmentedPacket.messageId, nodeId, fragmentedPacket.sourceNode, fragmentedPacket.retransmit);
 }
 
-void LoRaMeshRouter::createBroadcastPacket(int packetSize, int messageId, int hopId, int source, bool retransmit)
+void LoRaAloha::createBroadcastPacket(int packetSize, int messageId, int hopId, int source, bool retransmit)
 {
-    // TODO: Prüfe den Typ des packets und update die packetQueue mir einem aktuellen Packet falls nötig
-
-    auto headerPaket = new Packet("BroadcastHeaderPkt");
-    auto headerPayload = makeShared<BroadcastHeader>();
+    auto headerPaket = new Packet("BroadcastLeaderFragment");
+    auto headerPayload = makeShared<BroadcastLeaderFragment>();
 
     if (messageId == -1) {
         messageId = headerPaket->getId();
@@ -485,9 +474,17 @@ void LoRaMeshRouter::createBroadcastPacket(int packetSize, int messageId, int ho
     if (source == -1) {
         source = nodeId;
     }
-
-    headerPayload->setChunkLength(B(BROADCAST_HEADER_SIZE));
     headerPayload->setSize(packetSize);
+    if (packetSize + BROADCAST_LEADER_FRAGMENT_META_SIZE > 255) {
+        headerPayload->setChunkLength(B(255));
+        headerPayload->setPayloadSize(255 - BROADCAST_LEADER_FRAGMENT_META_SIZE);
+        packetSize = packetSize - (255 - BROADCAST_LEADER_FRAGMENT_META_SIZE);
+    }
+    else {
+        headerPayload->setChunkLength(B(packetSize + BROADCAST_LEADER_FRAGMENT_META_SIZE));
+        headerPayload->setPayloadSize(packetSize);
+        packetSize = 0;
+    }
     headerPayload->setMessageId(messageId);
     headerPayload->setSource(source);
     headerPayload->setHop(hopId);
@@ -496,13 +493,15 @@ void LoRaMeshRouter::createBroadcastPacket(int packetSize, int messageId, int ho
     headerPaket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
     auto messageTypeTag = headerPaket->addTagIfAbsent<MessageTypeTag>();
     messageTypeTag->setIsNeighbourMsg(!retransmit);
-    messageTypeTag->setIsHeader(false);
+    messageTypeTag->setIsHeader(true);
 
-    auto headerEncap = encapsulate(headerPaket);
-    packetQueue.enqueuePacket(headerEncap, true);
-    waitTimeMap[headerEncap->getId()] = 150;
+    encapsulate(headerPaket);
 
-    int i = 0;
+    packetQueue.enqueuePacket(headerPaket, true);
+    EV << "Enquein paket" << endl;
+
+    // INFO: das nullte packet ist das was im leader direkt mitgeschickt wird
+    int i = 1;
     while (packetSize > 0) {
         auto fragmentPacket = new Packet("BroadcastFragmentPkt");
         auto fragmentPayload = makeShared<BroadcastFragment>();
@@ -527,16 +526,13 @@ void LoRaMeshRouter::createBroadcastPacket(int packetSize, int messageId, int ho
         messageTypeTag->setIsNeighbourMsg(!retransmit);
         messageTypeTag->setIsHeader(false);
 
-        auto fragmentEncap = encapsulate(fragmentPacket);
-        packetQueue.enqueuePacket(fragmentEncap);
+        encapsulate(fragmentPacket);
+        packetQueue.enqueuePacket(fragmentPacket);
 
-        if (packetSize == 0) {
-            waitTimeMap[fragmentEncap->getId()] = 50 + 270 + intuniform(0, 50);
-        }
     }
 }
 
-void LoRaMeshRouter::announceNodeId(int respond)
+void LoRaAloha::announceNodeId(int respond)
 {
     auto nodeAnnouncePacket = new Packet("NodeAnnouncePacket");
     auto nodeAnnouncePayload = makeShared<NodeAnnounce>();
@@ -549,45 +545,30 @@ void LoRaMeshRouter::announceNodeId(int respond)
     nodeAnnouncePacket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
     nodeAnnouncePacket->addTagIfAbsent<MessageTypeTag>()->setIsNeighbourMsg(false);
     auto fragmentEncap = encapsulate(nodeAnnouncePacket);
-    packetQueue.enqueuePacket(fragmentEncap);
+    packetQueue.enqueuePacketAtPosition(fragmentEncap, 0);
 }
 
-bool LoRaMeshRouter::isReceiving()
+bool LoRaAloha::isReceiving()
 {
     return radio->getReceptionState() == IRadio::RECEPTION_STATE_RECEIVING;
 }
 
-void LoRaMeshRouter::turnOnReceiver()
+void LoRaAloha::turnOnReceiver()
 {
+
     LoRaRadio *loraRadio;
     loraRadio = check_and_cast<LoRaRadio*>(radio);
     loraRadio->setRadioMode(IRadio::RADIO_MODE_RECEIVER);
 }
 
-void LoRaMeshRouter::senderWaitDelay(int waitTime)
-{
-    simtime_t newScheduleTime = simTime() + SimTime(waitTime, SIMTIME_MS); // assume waitTime is in milliseconds
-
-    if (waitDelay->isScheduled()) {
-        simtime_t currentScheduledTime = waitDelay->getArrivalTime();
-        if (newScheduleTime > currentScheduledTime) {
-            cancelEvent(waitDelay);
-            scheduleAt(newScheduleTime, waitDelay);
-        }
-    }
-    else {
-        scheduleAt(newScheduleTime, waitDelay);
-    }
-}
-
-void LoRaMeshRouter::turnOffReceiver()
+void LoRaAloha::turnOffReceiver()
 {
     LoRaRadio *loraRadio;
     loraRadio = check_and_cast<LoRaRadio*>(radio);
     loraRadio->setRadioMode(IRadio::RADIO_MODE_SLEEP);
 }
 
-MacAddress LoRaMeshRouter::getAddress()
+MacAddress LoRaAloha::getAddress()
 {
     return address;
 }
