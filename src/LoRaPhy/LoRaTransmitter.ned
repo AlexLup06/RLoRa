@@ -20,8 +20,11 @@ import inet.physicallayer.wireless.common.base.packetlevel.NarrowbandTransmitter
 module LoRaTransmitter extends NarrowbandTransmitterBase
 {
     parameters:
+
         @signal[LoRaTransmissionCreated](type=bool); // optional
         @statistic[LoRaTransmissionCreated](source=LoRaTransmissionCreated; record=count);
+        @statistic[sentPacketsDuration](source=sentPacketsDuration; record=vector; interpolationmode=none);
+
         modulation = default("LoRaModulation");
         @class(LoRaTransmitter);
 }

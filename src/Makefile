@@ -65,6 +65,7 @@ OBJS = \
     $O/LoRaMeshRouter/BroadcastFragment_m.o \
     $O/LoRaMeshRouter/BroadcastHeader_m.o \
     $O/LoRaMeshRouter/NodeAnnounce_m.o \
+    $O/LoRaMeshRouter/WaitTimeTag_m.o \
     $O/LoRaPhy/LoRaPhyPreamble_m.o \
     $O/LoRaPhy/LoRaRadioControlInfo_m.o \
     $O/helpers/MessageTypeTag_m.o
@@ -79,6 +80,7 @@ MSGFILES = \
     LoRaMeshRouter/BroadcastFragment.msg \
     LoRaMeshRouter/BroadcastHeader.msg \
     LoRaMeshRouter/NodeAnnounce.msg \
+    LoRaMeshRouter/WaitTimeTag.msg \
     LoRaPhy/LoRaPhyPreamble.msg \
     LoRaPhy/LoRaRadioControlInfo.msg \
     helpers/MessageTypeTag.msg

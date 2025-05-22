@@ -401,9 +401,6 @@ void LoRaRadio::endReception(cMessage *timer)
     auto signal = static_cast<WirelessSignal*>(timer->getControlInfo());
     auto arrival = signal->getArrival();
     auto reception = signal->getReception();
-    EV << "timer == receptionTimer: " << (timer) << endl;
-    EV << "isReceiverMode(radioMode): " << isReceiverMode(radioMode) << endl;
-    EV << "arrival->getEndTime() == simTime(): " << (arrival->getEndTime() == simTime()) << endl;
     if (timer == receptionTimer && isReceiverMode(radioMode) && arrival->getEndTime() == simTime()) {
         auto transmission = signal->getTransmission();
         // TODO: this would draw twice from the random number generator in isReceptionSuccessful: auto isReceptionSuccessful = medium->isReceptionSuccessful(this, transmission, part);

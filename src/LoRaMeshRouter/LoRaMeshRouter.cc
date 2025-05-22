@@ -27,8 +27,10 @@
 #include "inet/linklayer/common/InterfaceTag_m.h"
 
 #include "../LoRa/LoRaTagInfo_m.h"
+#include "../LoRaApp/LoRaRobotPacket_m.h"
 #include "../helpers/generalHelpers.h"
 #include "../helpers/MessageTypeTag_m.h"
+#include "WaitTimeTag_m.h"
 
 #include "BroadcastAck_m.h"
 #include "BroadcastFragment_m.h"
@@ -80,6 +82,7 @@ void LoRaMeshRouter::initialize(int stage)
 
         throughputSignal = registerSignal("throughputBps");
         effectiveThroughputSignal = registerSignal("effectiveThroughputBps");
+        sentId = registerSignal("sentId");
         throughputTimer = new cMessage("throughputTimer");
         scheduleAt(simTime() + measurementInterval, throughputTimer);
 
@@ -124,7 +127,8 @@ void LoRaMeshRouter::handleSelfMessage(cMessage *msg)
  */
 void LoRaMeshRouter::handleUpperPacket(Packet *packet)
 {
-    bool retransmit = intuniform(0, 99) < 100;
+    const auto &payload = packet->peekAtFront<LoRaRobotPacket>();
+    bool retransmit = payload->isMission();
     createBroadcastPacket(packet->getByteLength(), -1, -1, -1, retransmit);
 
     if (currentTxFrame == nullptr) {
@@ -435,13 +439,13 @@ Packet* LoRaMeshRouter::decapsulate(Packet *frame)
  */
 void LoRaMeshRouter::sendDataFrame()
 {
-    auto frameToSend = getCurrentTransmission();
-    if (frameToSend != nullptr) {
-        int waitTime = waitTimeMap[frameToSend->getId()];
+    Packet *frameToSend = getCurrentTransmission();
+    auto waitTimeTag = frameToSend->getTag<WaitTimeTag>();
+    int waitTime = waitTimeTag->getWaitTime();
 
-        senderWaitDelay(waitTime);
-        sendDown(frameToSend);
-    }
+    senderWaitDelay(waitTime);
+    sendDown(frameToSend);
+    emit(sentId, frameToSend->getId());
 }
 
 /****************************************************************
@@ -494,13 +498,17 @@ void LoRaMeshRouter::createBroadcastPacket(int packetSize, int messageId, int ho
     headerPayload->setRetransmit(retransmit);
     headerPaket->insertAtBack(headerPayload);
     headerPaket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
+
     auto messageTypeTag = headerPaket->addTagIfAbsent<MessageTypeTag>();
     messageTypeTag->setIsNeighbourMsg(!retransmit);
-    messageTypeTag->setIsHeader(false);
+    messageTypeTag->setIsHeader(true);
+
+    auto waitTimeTag = headerPaket->addTagIfAbsent<WaitTimeTag>();
+    waitTimeTag->setWaitTime(150);
 
     auto headerEncap = encapsulate(headerPaket);
-    packetQueue.enqueuePacket(headerEncap, true);
-    waitTimeMap[headerEncap->getId()] = 150;
+    packetQueue.enqueuePacket(headerEncap);
+    emit(addedToQueueId, headerEncap->getId());
 
     int i = 0;
     while (packetSize > 0) {
@@ -523,16 +531,19 @@ void LoRaMeshRouter::createBroadcastPacket(int packetSize, int messageId, int ho
         fragmentPayload->setFragment(i++);
         fragmentPacket->insertAtBack(fragmentPayload);
         fragmentPacket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
+
         auto messageTypeTag = fragmentPacket->addTagIfAbsent<MessageTypeTag>();
         messageTypeTag->setIsNeighbourMsg(!retransmit);
         messageTypeTag->setIsHeader(false);
 
+        if (packetSize == 0) {
+            auto waitTimeTag = fragmentPacket->addTagIfAbsent<WaitTimeTag>();
+            waitTimeTag->setWaitTime(50 + 270 + intuniform(0, 50));
+        }
+
         auto fragmentEncap = encapsulate(fragmentPacket);
         packetQueue.enqueuePacket(fragmentEncap);
-
-        if (packetSize == 0) {
-            waitTimeMap[fragmentEncap->getId()] = 50 + 270 + intuniform(0, 50);
-        }
+        emit(addedToQueueId, fragmentEncap->getId());
     }
 }
 
@@ -550,6 +561,7 @@ void LoRaMeshRouter::announceNodeId(int respond)
     nodeAnnouncePacket->addTagIfAbsent<MessageTypeTag>()->setIsNeighbourMsg(false);
     auto fragmentEncap = encapsulate(nodeAnnouncePacket);
     packetQueue.enqueuePacket(fragmentEncap);
+    emit(addedToQueueId, fragmentEncap->getId());
 }
 
 bool LoRaMeshRouter::isReceiving()

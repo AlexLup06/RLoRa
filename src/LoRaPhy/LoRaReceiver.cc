@@ -34,7 +34,7 @@ void LoRaReceiver::initialize(int stage)
     if (stage == INITSTAGE_LOCAL) {
         snirThreshold = math::dB2fraction(par("snirThreshold"));
         energyDetection = mW(math::dBmW2mW(par("energyDetection")));
-        if (strcmp(getParentModule()->getClassName(), "flora::LoRaGWRadio") == 0) {
+        if (strcmp(getParentModule()->getClassName(), "rlora::LoRaGWRadio") == 0) {
             iAmGateway = true;
         }
         else
@@ -112,7 +112,6 @@ bool LoRaReceiver::isPacketCollided(const IReception *reception, IRadioSignal::S
     W signalRSSI_w = loRaReception->getPower();
     double signalRSSI_mw = signalRSSI_w.get() * 1000;
     double signalRSSI_dBm = math::mW2dBmW(signalRSSI_mw);
-    EV << "Signal RSSI in mw: " << signalRSSI_mw << endl;
     EV << "Signal RSSI in dBm: " << signalRSSI_dBm << endl;
     int receptionSF = loRaReception->getLoRaSF();
     for (auto interferingReception : *interferingReceptions) {

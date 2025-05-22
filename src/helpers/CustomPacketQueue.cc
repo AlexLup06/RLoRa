@@ -23,17 +23,18 @@ CustomPacketQueue::~CustomPacketQueue()
     }
 }
 
-void CustomPacketQueue::enqueuePacket(Packet *pkt, bool isHeader)
+void CustomPacketQueue::enqueuePacket(Packet *pkt)
 {
     auto typeTag = pkt->getTag<MessageTypeTag>();
+    EV << "CustomPacketQueue::enqueuePacket" << endl;
 
     if (!typeTag->isNeighbourMsg()) {
-        EV << "Just adding to back" << endl;
+        EV << "This is Mission - Just adding to back" << endl;
         packetQueue.push_back(pkt);
         return;
     }
 
-    if (isHeader) {
+    if (typeTag->isHeader()) {
         // Remove all NeighbourMsg packets and find the position of the first one
         int firstNeighbourPos = -1;
         int index = 0;
@@ -43,6 +44,9 @@ void CustomPacketQueue::enqueuePacket(Packet *pkt, bool isHeader)
 
             // if the header was already sent we dont want to override the rest of the packet
             if (tag->isNeighbourMsg() && firstNeighbourPos == -1 && !tag->isHeader()) {
+                EV << "Header already sent, we dont want to override rest - just need to append to back" << endl;
+                ++it;
+                ++index;
                 continue;
             }
 
@@ -55,6 +59,7 @@ void CustomPacketQueue::enqueuePacket(Packet *pkt, bool isHeader)
                 EV << "Erase neighbour packet" << endl;
             }
             else {
+                EV << "Just go to Next" << endl;
                 ++it;
                 ++index;
             }
@@ -62,7 +67,7 @@ void CustomPacketQueue::enqueuePacket(Packet *pkt, bool isHeader)
 
         // If no NeighbourMsgs were found, just push_back
         if (firstNeighbourPos == -1) {
-            EV << "Just adding to back" << endl;
+            EV << "No neighbour MSG - adding to back" << endl;
             packetQueue.push_back(pkt);
         }
         else {

@@ -25,6 +25,7 @@
 #include "inet/linklayer/common/InterfaceTag_m.h"
 
 #include "../LoRa/LoRaTagInfo_m.h"
+#include "../LoRaApp/LoRaRobotPacket_m.h"
 #include "../helpers/generalHelpers.h"
 #include "../helpers/MessageTypeTag_m.h"
 
@@ -116,7 +117,8 @@ void LoRaAloha::handleSelfMessage(cMessage *msg)
 void LoRaAloha::handleUpperPacket(Packet *packet)
 {
     // add header to queue
-    bool retransmit = intuniform(0, 99) < 100;
+    const auto& payload = packet->peekAtFront<LoRaRobotPacket>();
+    bool retransmit = payload->isMission();
     createBroadcastPacket(packet->getByteLength(), -1, -1, -1, retransmit);
 
     if (currentTxFrame == nullptr) {
@@ -497,8 +499,7 @@ void LoRaAloha::createBroadcastPacket(int packetSize, int messageId, int hopId, 
 
     encapsulate(headerPaket);
 
-    packetQueue.enqueuePacket(headerPaket, true);
-    EV << "Enquein paket" << endl;
+    packetQueue.enqueuePacket(headerPaket);
 
     // INFO: das nullte packet ist das was im leader direkt mitgeschickt wird
     int i = 1;

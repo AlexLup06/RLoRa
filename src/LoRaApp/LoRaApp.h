@@ -34,17 +34,18 @@ class LoRaApp: public cSimpleModule, public ILifecycle {
 protected:
     void initialize(int stage) override;
     void handleMessage(cMessage *msg) override;
-    void sendMessageDown();
+    void sendMessageDown(bool isMission);
     int numInitStages() const override { return NUM_INIT_STAGES; }
     virtual bool handleOperationStage(LifecycleOperation *operation,
             IDoneCallback *doneCallback) override;
 
-    int numberOfPacketsToSend;
-    int sentPackets;
-    cMessage *sendMessage;
+    cMessage *sendTrajectory;
+    cMessage *sendMission;
 
-    simtime_t timeToFirstPacket;
-    simtime_t timeToNextPacket;
+    simtime_t timeToFirstTrajectory;
+    simtime_t timeToFirstMission;
+    simtime_t timeToNextTrajectory;
+    simtime_t timeToNextMission;
 
     //LoRa parameters control
     LoRaRadio *loRaRadio;

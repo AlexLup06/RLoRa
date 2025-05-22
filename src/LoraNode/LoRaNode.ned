@@ -15,7 +15,7 @@
 
 package rlora.LoraNode;
 
-import inet.mobility.static.StationaryMobility;
+import inet.mobility.contract.IMobility;
 import inet.networklayer.common.InterfaceTable;
 import inet.applications.contract.IApp;
 import rlora.LoRa.LoRaNic;
@@ -36,7 +36,7 @@ module LoRaNode
         interfaceTable: InterfaceTable {
             @display("p=30,26");
         }
-        mobility: StationaryMobility {
+        mobility:  <> like IMobility {
             @display("p=24,88");
         }
         LoRaNic: LoRaNic {

@@ -11,7 +11,7 @@ network LoRaNetworkTest
         int numberOfNodes = default(1);
         int networkSizeX = default(500);
         int networkSizeY = default(500);
-        @display("bgb=562,417");
+        @display("bgb=400,400");
     submodules:
         loRaNodes[numberOfNodes]: LoRaNode {
             @display("p=400,304");

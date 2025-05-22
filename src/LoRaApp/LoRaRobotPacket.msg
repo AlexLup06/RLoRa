@@ -33,4 +33,5 @@ class LoRaOptions {
 //
 class LoRaRobotPacket extends inet::FieldsChunk {
     LoRaOptions options;
+    bool isMission;
 }

@@ -18,6 +18,7 @@
 #include "inet/linklayer/common/UserPriorityTag_m.h"
 
 #include "../LoRa/LoRaTagInfo_m.h"
+#include "../LoRaApp/LoRaRobotPacket_m.h"
 #include "../helpers/generalHelpers.h"
 #include "../helpers/MessageTypeTag_m.h"
 
@@ -87,7 +88,7 @@ void LoRaCSMA::initialize(int stage)
         }
         nodeAnnounce = new cMessage("Node Announce");
         nodeId = intuniform(0, 16777216); //16^6 -1
-//        scheduleAt(intuniform(0, 1000) / 1000.0, nodeAnnounce);
+        scheduleAt(intuniform(0, 1000) / 1000.0, nodeAnnounce);
         packetQueue = CustomPacketQueue();
         // }
 
@@ -175,7 +176,8 @@ void LoRaCSMA::handleSelfMessage(cMessage *msg)
 
 void LoRaCSMA::handleUpperPacket(Packet *packet)
 {
-    bool retransmit = intuniform(0, 100) < 100;
+    const auto& payload = packet->peekAtFront<LoRaRobotPacket>();
+    bool retransmit = payload->isMission();
     createBroadcastPacket(packet->getByteLength(), -1, -1, -1, retransmit);
 
     if (currentTxFrame == nullptr) {
@@ -539,11 +541,11 @@ void LoRaCSMA::createBroadcastPacket(int packetSize, int messageId, int hopId, i
     headerPaket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
     auto messageTypeTag = headerPaket->addTagIfAbsent<MessageTypeTag>();
     messageTypeTag->setIsNeighbourMsg(!retransmit);
-    messageTypeTag->setIsHeader(false);
+    messageTypeTag->setIsHeader(true);
 
     encapsulate(headerPaket);
 
-    packetQueue.enqueuePacket(headerPaket, true);
+    packetQueue.enqueuePacket(headerPaket);
 
     // INFO: das nullte packet ist das was im leader direkt mitgeschickt wird
     int i = 1;

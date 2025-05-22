@@ -22,7 +22,9 @@
 #include "../LoRa/LoRaRadio.h"
 #include "../LoRa/LoRaMacFrame_m.h"
 
+using namespace inet;
 namespace rlora {
+
 
 class LoRaTransmitter : public FlatTransmitterBase {
     public:
@@ -36,6 +38,7 @@ class LoRaTransmitter : public FlatTransmitterBase {
         bool iAmGateway;
 
         simsignal_t LoRaTransmissionCreated;
+        simsignal_t sentPacketsDuration;
 
 };
 

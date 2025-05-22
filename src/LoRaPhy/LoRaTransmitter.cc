@@ -39,8 +39,10 @@ void LoRaTransmitter::initialize(int stage) {
         centerFrequency = Hz(par("centerFrequency"));
         bandwidth = Hz(par("bandwidth"));
         LoRaTransmissionCreated = registerSignal("LoRaTransmissionCreated");
+        sentPacketsDuration = registerSignal("sentPacketsDuration");
 
-        if (strcmp(getParentModule()->getClassName(), "flora::LoRaGWRadio")
+
+        if (strcmp(getParentModule()->getClassName(), "rlora::LoRaGWRadio")
                 == 0) {
             iAmGateway = true;
         } else
@@ -109,6 +111,8 @@ const ITransmission* LoRaTransmitter::createTransmission(
               << endl;
     EV << "[MSDebug] I am sending packet with SF: " << frame->getSpreadFactor()
               << endl;
+
+    const_cast<LoRaTransmitter*>(this)->emit(sentPacketsDuration, duration);
 
     return new LoRaTransmission(transmitter, macFrame, startTime, endTime,
             Tpreamble, Theader, Tpayload, startPosition, endPosition,

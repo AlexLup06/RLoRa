@@ -24,15 +24,16 @@ void LoRaApp::initialize(int stage)
 {
     cSimpleModule::initialize(stage);
     if (stage == INITSTAGE_APPLICATION_LAYER) {
-        timeToFirstPacket = par("timeToFirstPacket");
-        sendMessage = new cMessage("Send Message");
-        timeToNextPacket = par("timeToNextPacket");
-        numberOfPacketsToSend = par("numberOfPacketsToSend");
-        sentPackets = 0;
+        timeToFirstTrajectory = par("timeToFirstTrajectory");
+        timeToFirstMission = par("timeToFirstMission");
+        timeToNextTrajectory = par("timeToNextTrajectory");
+        timeToNextMission = par("timeToNextMission");
 
-        if (numberOfPacketsToSend > 0) {
-            scheduleAt(simTime() + timeToFirstPacket, sendMessage);
-        }
+        sendTrajectory = new cMessage("SendTrajectory");
+        sendMission = new cMessage("sendMission");
+
+        scheduleAt(simTime() + timeToFirstTrajectory, sendTrajectory);
+        scheduleAt(simTime() + timeToFirstMission, sendMission);
 
         //LoRa physical layer parameters
         loRaRadio = check_and_cast<LoRaRadio*>(getParentModule()->getSubmodule("LoRaNic")->getSubmodule("radio"));
@@ -48,13 +49,14 @@ void LoRaApp::initialize(int stage)
 void LoRaApp::handleMessage(cMessage *msg)
 {
     if (msg->isSelfMessage()) {
-        if (msg == sendMessage) {
-            sendMessageDown();
-            sentPackets++;
+        if (msg == sendTrajectory) {
+            sendMessageDown(false);
+            scheduleAt(simTime() + timeToNextTrajectory, sendTrajectory);
+        }
 
-            if (sentPackets < numberOfPacketsToSend) {
-                scheduleAt(simTime() + timeToNextPacket, sendMessage);
-            }
+        if (msg == sendMission) {
+            sendMessageDown(true);
+            scheduleAt(simTime() + timeToNextMission, sendMission);
         }
     }
     else {
@@ -63,11 +65,18 @@ void LoRaApp::handleMessage(cMessage *msg)
     }
 }
 
-void LoRaApp::sendMessageDown()
+void LoRaApp::sendMessageDown(bool isMission)
 {
     auto pktRequest = new Packet("DataFrame");
     auto payload = makeShared<LoRaRobotPacket>();
-    payload->setChunkLength(B(252));
+
+    payload->setIsMission(isMission);
+    if (isMission) {
+        payload->setChunkLength(B(intuniform(50, 100)));
+    }
+    else {
+        payload->setChunkLength(B(144));
+    }
 
     auto loraTag = pktRequest->addTagIfAbsent<LoRaTag>();
     loraTag->setBandwidth(getBW());

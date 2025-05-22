@@ -50,8 +50,11 @@ protected:
     long bytesReceivedInInterval = 0;
     long effectiveBytesReceivedInInterval = 0;
     cMessage *throughputTimer = nullptr;
+    simsignal_t sentPacketsDuration;
     simsignal_t throughputSignal;
     simsignal_t effectiveThroughputSignal;
+    simsignal_t addedToQueueId;
+    simsignal_t sentId;
 
     cMessage *waitDelay = nullptr;
     cMessage *mediumStateChange = nullptr;
@@ -65,7 +68,6 @@ protected:
     IncompletePacketList incompletePacketList;
     CustomPacketQueue packetQueue;
     LatestMessageIdMap latestMessageIdMap;
-    map<int, int> waitTimeMap;
     LoRaRadio *loRaRadio;
 
 //    Packet *currentNodeAnnounceFrame = nullptr;

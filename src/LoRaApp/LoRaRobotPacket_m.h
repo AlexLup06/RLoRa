@@ -100,6 +100,7 @@ class LoRaOptions
  * class LoRaRobotPacket extends inet::FieldsChunk
  * {
  *     LoRaOptions options;
+ *     bool isMission;
  * }
  * </pre>
  */
@@ -107,6 +108,7 @@ class LoRaRobotPacket : public ::inet::FieldsChunk
 {
   protected:
     LoRaOptions options;
+    bool isMission_ = false;
 
   private:
     void copy(const LoRaRobotPacket& other);
@@ -126,6 +128,9 @@ class LoRaRobotPacket : public ::inet::FieldsChunk
     virtual const LoRaOptions& getOptions() const;
     virtual LoRaOptions& getOptionsForUpdate() { handleChange();return const_cast<LoRaOptions&>(const_cast<LoRaRobotPacket*>(this)->getOptions());}
     virtual void setOptions(const LoRaOptions& options);
+
+    virtual bool isMission() const;
+    virtual void setIsMission(bool isMission);
 };
 
 inline void doParsimPacking(omnetpp::cCommBuffer *b, const LoRaRobotPacket& obj) {obj.parsimPack(b);}

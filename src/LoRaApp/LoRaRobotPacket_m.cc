@@ -657,18 +657,21 @@ LoRaRobotPacket& LoRaRobotPacket::operator=(const LoRaRobotPacket& other)
 void LoRaRobotPacket::copy(const LoRaRobotPacket& other)
 {
     this->options = other.options;
+    this->isMission_ = other.isMission_;
 }
 
 void LoRaRobotPacket::parsimPack(omnetpp::cCommBuffer *b) const
 {
     ::inet::FieldsChunk::parsimPack(b);
     doParsimPacking(b,this->options);
+    doParsimPacking(b,this->isMission_);
 }
 
 void LoRaRobotPacket::parsimUnpack(omnetpp::cCommBuffer *b)
 {
     ::inet::FieldsChunk::parsimUnpack(b);
     doParsimUnpacking(b,this->options);
+    doParsimUnpacking(b,this->isMission_);
 }
 
 const LoRaOptions& LoRaRobotPacket::getOptions() const
@@ -682,12 +685,24 @@ void LoRaRobotPacket::setOptions(const LoRaOptions& options)
     this->options = options;
 }
 
+bool LoRaRobotPacket::isMission() const
+{
+    return this->isMission_;
+}
+
+void LoRaRobotPacket::setIsMission(bool isMission)
+{
+    handleChange();
+    this->isMission_ = isMission;
+}
+
 class LoRaRobotPacketDescriptor : public omnetpp::cClassDescriptor
 {
   private:
     mutable const char **propertyNames;
     enum FieldConstants {
         FIELD_options,
+        FIELD_isMission,
     };
   public:
     LoRaRobotPacketDescriptor();
@@ -754,7 +769,7 @@ const char *LoRaRobotPacketDescriptor::getProperty(const char *propertyName) con
 int LoRaRobotPacketDescriptor::getFieldCount() const
 {
     omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
-    return base ? 1+base->getFieldCount() : 1;
+    return base ? 2+base->getFieldCount() : 2;
 }
 
 unsigned int LoRaRobotPacketDescriptor::getFieldTypeFlags(int field) const
@@ -767,8 +782,9 @@ unsigned int LoRaRobotPacketDescriptor::getFieldTypeFlags(int field) const
     }
     static unsigned int fieldTypeFlags[] = {
         FD_ISCOMPOUND,    // FIELD_options
+        FD_ISEDITABLE,    // FIELD_isMission
     };
-    return (field >= 0 && field < 1) ? fieldTypeFlags[field] : 0;
+    return (field >= 0 && field < 2) ? fieldTypeFlags[field] : 0;
 }
 
 const char *LoRaRobotPacketDescriptor::getFieldName(int field) const
@@ -781,8 +797,9 @@ const char *LoRaRobotPacketDescriptor::getFieldName(int field) const
     }
     static const char *fieldNames[] = {
         "options",
+        "isMission",
     };
-    return (field >= 0 && field < 1) ? fieldNames[field] : nullptr;
+    return (field >= 0 && field < 2) ? fieldNames[field] : nullptr;
 }
 
 int LoRaRobotPacketDescriptor::findField(const char *fieldName) const
@@ -790,6 +807,7 @@ int LoRaRobotPacketDescriptor::findField(const char *fieldName) const
     omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
     int baseIndex = base ? base->getFieldCount() : 0;
     if (strcmp(fieldName, "options") == 0) return baseIndex + 0;
+    if (strcmp(fieldName, "isMission") == 0) return baseIndex + 1;
     return base ? base->findField(fieldName) : -1;
 }
 
@@ -803,8 +821,9 @@ const char *LoRaRobotPacketDescriptor::getFieldTypeString(int field) const
     }
     static const char *fieldTypeStrings[] = {
         "rlora::LoRaOptions",    // FIELD_options
+        "bool",    // FIELD_isMission
     };
-    return (field >= 0 && field < 1) ? fieldTypeStrings[field] : nullptr;
+    return (field >= 0 && field < 2) ? fieldTypeStrings[field] : nullptr;
 }
 
 const char **LoRaRobotPacketDescriptor::getFieldPropertyNames(int field) const
@@ -888,6 +907,7 @@ std::string LoRaRobotPacketDescriptor::getFieldValueAsString(omnetpp::any_ptr ob
     LoRaRobotPacket *pp = omnetpp::fromAnyPtr<LoRaRobotPacket>(object); (void)pp;
     switch (field) {
         case FIELD_options: return "";
+        case FIELD_isMission: return bool2string(pp->isMission());
         default: return "";
     }
 }
@@ -904,6 +924,7 @@ void LoRaRobotPacketDescriptor::setFieldValueAsString(omnetpp::any_ptr object, i
     }
     LoRaRobotPacket *pp = omnetpp::fromAnyPtr<LoRaRobotPacket>(object); (void)pp;
     switch (field) {
+        case FIELD_isMission: pp->setIsMission(string2bool(value)); break;
         default: throw omnetpp::cRuntimeError("Cannot set field %d of class 'LoRaRobotPacket'", field);
     }
 }
@@ -919,6 +940,7 @@ omnetpp::cValue LoRaRobotPacketDescriptor::getFieldValue(omnetpp::any_ptr object
     LoRaRobotPacket *pp = omnetpp::fromAnyPtr<LoRaRobotPacket>(object); (void)pp;
     switch (field) {
         case FIELD_options: return omnetpp::toAnyPtr(&pp->getOptions()); break;
+        case FIELD_isMission: return pp->isMission();
         default: throw omnetpp::cRuntimeError("Cannot return field %d of class 'LoRaRobotPacket' as cValue -- field index out of range?", field);
     }
 }
@@ -935,6 +957,7 @@ void LoRaRobotPacketDescriptor::setFieldValue(omnetpp::any_ptr object, int field
     }
     LoRaRobotPacket *pp = omnetpp::fromAnyPtr<LoRaRobotPacket>(object); (void)pp;
     switch (field) {
+        case FIELD_isMission: pp->setIsMission(value.boolValue()); break;
         default: throw omnetpp::cRuntimeError("Cannot set field %d of class 'LoRaRobotPacket'", field);
     }
 }
