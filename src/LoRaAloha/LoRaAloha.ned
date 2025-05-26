@@ -25,10 +25,9 @@ module LoRaAloha extends MacProtocolBase like IMacProtocol
         string address @mutable = default("auto");
         double bitrate @unit(bps) = 250bps; // 802.15.4-2006 - IEEE Standard for Information technology
 
-        @signal[throughputBps](type=long);
+        @statistic[addedToQueueId](source=addedToQueueId; record=vector; interpolationmode=none);
+        @statistic[sentId](source=sentId; record=vector; interpolationmode=none);
         @statistic[throughputBps](source=throughputBps; record=vector; interpolationmode=none; unit=Bps);
-
-        @signal[effectiveThroughputBps](type=long);
         @statistic[effectiveThroughputBps](source=effectiveThroughputBps; record=vector; interpolationmode=none; unit=Bps);
 
         @class(LoRaAloha);

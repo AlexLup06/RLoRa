@@ -70,7 +70,11 @@ void LoRaCSMA::initialize(int stage)
         cwMulticast = par("cwMulticast");
         retryLimit = par("retryLimit");
 
-        // meine aenderungen {
+        //////////////////
+        //////////////////
+        //////////////////
+        //////////////////
+        ////////////////// meine aenderungen {
         cModule *radioModule = getModuleFromPar<cModule>(par("radioModule"), this);
         radioModule->subscribe(IRadio::receptionStateChangedSignal, this);
         radioModule->subscribe(IRadio::transmissionStateChangedSignal, this);
@@ -90,7 +94,16 @@ void LoRaCSMA::initialize(int stage)
         nodeId = intuniform(0, 16777216); //16^6 -1
         scheduleAt(intuniform(0, 1000) / 1000.0, nodeAnnounce);
         packetQueue = CustomPacketQueue();
-        // }
+
+        throughputSignal = registerSignal("throughputBps");
+        effectiveThroughputSignal = registerSignal("effectiveThroughputBps");
+        sentId = registerSignal("sentId");
+        throughputTimer = new cMessage("throughputTimer");
+        scheduleAt(simTime() + measurementInterval, throughputTimer);
+        //////////////////
+        //////////////////
+        //////////////////
+        //////////////////}
 
         // initialize self messages
         endBackoff = new cMessage("Backoff");
@@ -176,7 +189,7 @@ void LoRaCSMA::handleSelfMessage(cMessage *msg)
 
 void LoRaCSMA::handleUpperPacket(Packet *packet)
 {
-    const auto& payload = packet->peekAtFront<LoRaRobotPacket>();
+    const auto &payload = packet->peekAtFront<LoRaRobotPacket>();
     bool retransmit = payload->isMission();
     createBroadcastPacket(packet->getByteLength(), -1, -1, -1, retransmit);
 
@@ -200,6 +213,16 @@ void LoRaCSMA::handleWithFsm(cMessage *msg)
     if (msg == nodeAnnounce) {
         announceNodeId(0);
         scheduleAfter(5, nodeAnnounce);
+    }
+
+    if (msg == throughputTimer) {
+        // Timer triggered
+        emit(throughputSignal, bytesReceivedInInterval);  // bytes per interval
+        emit(effectiveThroughputSignal, effectiveBytesReceivedInInterval);  // bytes per interval
+        bytesReceivedInInterval = 0;  // reset counter
+        effectiveBytesReceivedInInterval = 0;  // reset counter
+        scheduleAt(simTime() + measurementInterval, throughputTimer);
+        return;
     }
 
     FSMA_Switch(fsm){
@@ -418,11 +441,10 @@ void LoRaCSMA::cancelBackoffTimer()
  */
 void LoRaCSMA::sendDataFrame()
 {
-//    radio->setRadioMode(IRadio::RADIO_MODE_TRANSMITTER);
-//    sendDown(frameToSend->dup());
     auto frameToSend = getCurrentTransmission();
     if (frameToSend != nullptr) {
         sendDown(frameToSend->dup());
+        emit(sentId, frameToSend->getId());
     }
     frameToSend = nullptr;
     delete frameToSend;
@@ -597,6 +619,7 @@ void LoRaCSMA::announceNodeId(int respond)
 
 void LoRaCSMA::handlePacket(Packet *packet)
 {
+    bytesReceivedInInterval += packet->getByteLength();
     auto chunk = packet->peekAtFront<inet::Chunk>();
     if (auto msg = dynamic_cast<const NodeAnnounce*>(chunk.get())) {
         EV << "Received NodeAnnounce" << endl;
@@ -646,6 +669,8 @@ void LoRaCSMA::handlePacket(Packet *packet)
         fragmentPayload->setSource(source);
         fragmentPayload->setFragment(0);
 
+        effectiveBytesReceivedInInterval += msg->getPayloadSize();
+
         Result result = incompletePacketList.addToIncompletePacket(fragmentPayload);
 
         if (result.isComplete) {
@@ -661,6 +686,7 @@ void LoRaCSMA::handlePacket(Packet *packet)
     else if (auto msg = dynamic_cast<const BroadcastFragment*>(chunk.get())) {
         EV << "Received BroadcastFragment" << endl;
         Result result = incompletePacketList.addToIncompletePacket(msg);
+        effectiveBytesReceivedInInterval += packet->getByteLength() - BROADCAST_FRAGMENT_META_SIZE;
 
         if (result.isComplete) {
             if (result.sendUp) {

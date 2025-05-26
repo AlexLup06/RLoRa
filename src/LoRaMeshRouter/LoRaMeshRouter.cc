@@ -86,7 +86,7 @@ void LoRaMeshRouter::initialize(int stage)
         throughputTimer = new cMessage("throughputTimer");
         scheduleAt(simTime() + measurementInterval, throughputTimer);
 
-//        scheduleAt(intuniform(0, 1000) / 1000.0, nodeAnnounce);
+        scheduleAt(intuniform(0, 1000) / 1000.0, nodeAnnounce);
     }
     else if (stage == INITSTAGE_LINK_LAYER) {
         turnOnReceiver();

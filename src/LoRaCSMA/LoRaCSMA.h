@@ -61,6 +61,16 @@ protected:
     cMessage *receptionStated = nullptr;
     int nodeId = -1;
 
+    simtime_t measurementInterval = 1.0;  // 1 second
+    long bytesReceivedInInterval = 0;
+    long effectiveBytesReceivedInInterval = 0;
+    cMessage *throughputTimer = nullptr;
+    simsignal_t throughputSignal;
+    simsignal_t effectiveThroughputSignal;
+    simsignal_t addedToQueueId;
+    simsignal_t sentId;
+
+
     /**
      * @name LoRaCSMA state variables
      * Various state information checked and modified according to the state machine.

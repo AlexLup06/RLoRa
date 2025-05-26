@@ -77,11 +77,11 @@ void LoRaAloha::initialize(int stage)
 
         throughputSignal = registerSignal("throughputBps");
         effectiveThroughputSignal = registerSignal("effectiveThroughputBps");
+        sentId = registerSignal("sentId");
         throughputTimer = new cMessage("throughputTimer");
-//        scheduleAt(simTime() + measurementInterval, throughputTimer);
+        scheduleAt(simTime() + measurementInterval, throughputTimer);
 
-
-//        scheduleAt(intuniform(0, 1000) / 1000.0, nodeAnnounce);
+        scheduleAt(intuniform(0, 1000) / 1000.0, nodeAnnounce);
     }
     else if (stage == INITSTAGE_LINK_LAYER) {
         turnOnReceiver();
@@ -117,7 +117,7 @@ void LoRaAloha::handleSelfMessage(cMessage *msg)
 void LoRaAloha::handleUpperPacket(Packet *packet)
 {
     // add header to queue
-    const auto& payload = packet->peekAtFront<LoRaRobotPacket>();
+    const auto &payload = packet->peekAtFront<LoRaRobotPacket>();
     bool retransmit = payload->isMission();
     createBroadcastPacket(packet->getByteLength(), -1, -1, -1, retransmit);
 
@@ -434,6 +434,7 @@ Packet* LoRaAloha::decapsulate(Packet *frame)
 void LoRaAloha::sendDataFrame()
 {
     auto frameToSend = getCurrentTransmission();
+    emit(sentId, frameToSend->getId());
     sendDown(frameToSend);
 }
 

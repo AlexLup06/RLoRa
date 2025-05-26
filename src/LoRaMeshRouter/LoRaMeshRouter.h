@@ -50,7 +50,6 @@ protected:
     long bytesReceivedInInterval = 0;
     long effectiveBytesReceivedInInterval = 0;
     cMessage *throughputTimer = nullptr;
-    simsignal_t sentPacketsDuration;
     simsignal_t throughputSignal;
     simsignal_t effectiveThroughputSignal;
     simsignal_t addedToQueueId;
