@@ -84,9 +84,9 @@ void LoRaMeshRouter::initialize(int stage)
         effectiveThroughputSignal = registerSignal("effectiveThroughputBps");
         sentId = registerSignal("sentId");
         throughputTimer = new cMessage("throughputTimer");
-        scheduleAt(simTime() + measurementInterval, throughputTimer);
+//        scheduleAt(simTime() + measurementInterval, throughputTimer);
 
-        scheduleAt(intuniform(0, 1000) / 1000.0, nodeAnnounce);
+//        scheduleAt(intuniform(0, 1000) / 1000.0, nodeAnnounce);
     }
     else if (stage == INITSTAGE_LINK_LAYER) {
         turnOnReceiver();
@@ -96,6 +96,30 @@ void LoRaMeshRouter::initialize(int stage)
 
 void LoRaMeshRouter::finish()
 {
+    cancelAndDelete(receptionStated);
+    cancelAndDelete(transmitSwitchDone);
+    cancelAndDelete(nodeAnnounce);
+    cancelAndDelete(waitDelay);
+    cancelAndDelete(endTransmission);
+    cancelAndDelete(mediumStateChange);
+    cancelAndDelete(droppedPacket);
+    cancelAndDelete(throughputTimer);
+
+    receptionStated = nullptr;
+    transmitSwitchDone = nullptr;
+    nodeAnnounce = nullptr;
+    waitDelay = nullptr;
+    endTransmission = nullptr;
+    droppedPacket = nullptr;
+    mediumStateChange = nullptr;
+    throughputTimer = nullptr;
+
+    while (!packetQueue.isEmpty()) {
+        auto *pkt = packetQueue.dequeuePacket();
+        delete pkt;
+    }
+
+    currentTxFrame = nullptr;
 }
 
 void LoRaMeshRouter::configureNetworkInterface()
@@ -443,7 +467,9 @@ void LoRaMeshRouter::sendDataFrame()
     auto waitTimeTag = frameToSend->getTag<WaitTimeTag>();
     int waitTime = waitTimeTag->getWaitTime();
 
-    senderWaitDelay(waitTime);
+    if (waitTime > 0) {
+        senderWaitDelay(waitTime);
+    }
     sendDown(frameToSend);
     emit(sentId, frameToSend->getId());
 }
@@ -540,6 +566,10 @@ void LoRaMeshRouter::createBroadcastPacket(int packetSize, int messageId, int ho
             auto waitTimeTag = fragmentPacket->addTagIfAbsent<WaitTimeTag>();
             waitTimeTag->setWaitTime(50 + 270 + intuniform(0, 50));
         }
+        else {
+            auto waitTimeTag = fragmentPacket->addTagIfAbsent<WaitTimeTag>();
+            waitTimeTag->setWaitTime(0);
+        }
 
         auto fragmentEncap = encapsulate(fragmentPacket);
         packetQueue.enqueuePacket(fragmentEncap);
@@ -559,6 +589,10 @@ void LoRaMeshRouter::announceNodeId(int respond)
     nodeAnnouncePacket->insertAtBack(nodeAnnouncePayload);
     nodeAnnouncePacket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
     nodeAnnouncePacket->addTagIfAbsent<MessageTypeTag>()->setIsNeighbourMsg(false);
+
+    auto waitTimeTag = nodeAnnouncePacket->addTagIfAbsent<WaitTimeTag>();
+    waitTimeTag->setWaitTime(0);
+
     auto fragmentEncap = encapsulate(nodeAnnouncePacket);
     packetQueue.enqueuePacket(fragmentEncap);
     emit(addedToQueueId, fragmentEncap->getId());

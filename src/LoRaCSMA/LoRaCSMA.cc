@@ -159,6 +159,31 @@ void LoRaCSMA::finish()
     recordScalar("numReceived", numReceived);
     recordScalar("numSentBroadcast", numSentBroadcast);
     recordScalar("numReceivedBroadcast", numReceivedBroadcast);
+
+    cancelAndDelete(receptionStated);
+    cancelAndDelete(transmitSwitchDone);
+    cancelAndDelete(nodeAnnounce);
+    cancelAndDelete(mediumStateChange);
+    cancelAndDelete(throughputTimer);
+    cancelAndDelete(endBackoff);
+    cancelAndDelete(endData);
+    cancelAndDelete(mediumStateChange);
+
+    receptionStated = nullptr;
+    transmitSwitchDone = nullptr;
+    nodeAnnounce = nullptr;
+    mediumStateChange = nullptr;
+    throughputTimer = nullptr;
+    endBackoff = nullptr;
+    endData = nullptr;
+    mediumStateChange = nullptr;
+
+    while (!packetQueue.isEmpty()) {
+        auto *pkt = packetQueue.dequeuePacket();
+        delete pkt;
+    }
+
+    currentTxFrame = nullptr;
 }
 
 void LoRaCSMA::configureNetworkInterface()

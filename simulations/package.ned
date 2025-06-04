@@ -8,7 +8,7 @@ import inet.networklayer.configurator.ipv4.Ipv4NetworkConfigurator;
 network LoRaNetworkTest
 {
     parameters:
-        int numberOfNodes = default(1);
+        int numberOfNodes = default(2);
         int networkSizeX = default(500);
         int networkSizeY = default(500);
         @display("bgb=400,400");

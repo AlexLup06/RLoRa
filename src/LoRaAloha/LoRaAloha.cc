@@ -68,19 +68,20 @@ void LoRaAloha::initialize(int stage)
         packetQueue = CustomPacketQueue();
 
         nodeId = intuniform(0, 16777216); //16^6 -1
+
         mediumStateChange = new cMessage("MediumStateChange");
         droppedPacket = new cMessage("Dropped Packet");
         endTransmission = new cMessage("End Transmission");
         nodeAnnounce = new cMessage("Node Announce");
         transmitSwitchDone = new cMessage("transmitSwitchDone");
         receptionStated = new cMessage("receptionStated");
+        throughputTimer = new cMessage("throughputTimer");
 
         throughputSignal = registerSignal("throughputBps");
         effectiveThroughputSignal = registerSignal("effectiveThroughputBps");
         sentId = registerSignal("sentId");
-        throughputTimer = new cMessage("throughputTimer");
-        scheduleAt(simTime() + measurementInterval, throughputTimer);
 
+        scheduleAt(simTime() + measurementInterval, throughputTimer);
         scheduleAt(intuniform(0, 1000) / 1000.0, nodeAnnounce);
     }
     else if (stage == INITSTAGE_LINK_LAYER) {
@@ -91,6 +92,28 @@ void LoRaAloha::initialize(int stage)
 
 void LoRaAloha::finish()
 {
+    cancelAndDelete(receptionStated);
+    cancelAndDelete(transmitSwitchDone);
+    cancelAndDelete(nodeAnnounce);
+    cancelAndDelete(endTransmission);
+    cancelAndDelete(mediumStateChange);
+    cancelAndDelete(droppedPacket);
+    cancelAndDelete(throughputTimer);
+
+    receptionStated = nullptr;
+    transmitSwitchDone = nullptr;
+    nodeAnnounce = nullptr;
+    endTransmission = nullptr;
+    droppedPacket = nullptr;
+    mediumStateChange = nullptr;
+    throughputTimer = nullptr;
+
+    while (!packetQueue.isEmpty()) {
+        auto *pkt = packetQueue.dequeuePacket();
+        delete pkt;
+    }
+
+    currentTxFrame = nullptr;
 }
 
 void LoRaAloha::configureNetworkInterface()

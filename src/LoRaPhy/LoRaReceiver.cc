@@ -159,13 +159,16 @@ bool LoRaReceiver::isPacketCollided(const IReception *reception, IRadioSignal::S
         if (csBegin < loRaInterference->getEndTime()) {
             timingCollision = true;
         }
+        LoRaReceiver *receiverInstance = check_and_cast<LoRaReceiver*>(getModuleByPath("."));
 
         if (overlap && frequencyCollision) {
             if (alohaChannelModel == true) {
+                receiverInstance->emit(receiverInstance->LoRaReceptionCollision, true);
                 return true;
             }
             if (alohaChannelModel == false) {
                 if (captureEffect == false && timingCollision) {
+                    receiverInstance->emit(receiverInstance->LoRaReceptionCollision, true);
                     return true;
                 }
             }

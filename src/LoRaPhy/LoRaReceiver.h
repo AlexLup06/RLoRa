@@ -42,6 +42,9 @@ namespace rlora {
 class LoRaReceiver : public FlatReceiverBase
 
 {
+protected:
+    simsignal_t LoRaReceptionCollision;
+
 private:
     W LoRaTP;
     Hz LoRaCF;
@@ -53,8 +56,6 @@ private:
 
     bool iAmGateway;
     bool alohaChannelModel;
-
-    simsignal_t LoRaReceptionCollision;
 
     int nonOrthDelta[6][6] = {
        {1, -8, -9, -9, -9, -9},

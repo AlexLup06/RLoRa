@@ -32,8 +32,9 @@ namespace rlora {
 
 class LoRaApp: public cSimpleModule, public ILifecycle {
 protected:
-    void initialize(int stage) override;
-    void handleMessage(cMessage *msg) override;
+    virtual void initialize(int stage) override;
+    virtual void handleMessage(cMessage *msg) override;
+    virtual void finish() override;
     void sendMessageDown(bool isMission);
     int numInitStages() const override { return NUM_INIT_STAGES; }
     virtual bool handleOperationStage(LifecycleOperation *operation,

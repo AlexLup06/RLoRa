@@ -46,6 +46,14 @@ void LoRaApp::initialize(int stage)
     }
 }
 
+void LoRaApp::finish(){
+    cancelAndDelete(sendTrajectory);
+    cancelAndDelete(sendMission);
+
+    sendTrajectory=nullptr;
+    sendMission=nullptr;
+}
+
 void LoRaApp::handleMessage(cMessage *msg)
 {
     if (msg->isSelfMessage()) {
