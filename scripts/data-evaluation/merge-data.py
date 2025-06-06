@@ -13,6 +13,7 @@ once merging is done we can do the following to get out wanted data
 effective thoughput:
     we already have this data available 
 
+
 whole thoughput:
     we already havre this data available
 
@@ -32,9 +33,4 @@ usage of the medium:
        if tm == start 
 
 collisions:
-    -> here we calculate the distinct number of collions. If a transmission started and during that transmission another one starts then we have 1 collision. If another one sends
-    then we have 2 if another one sends then we have 3 etc.
-
-    we practically use the same code from above but just count the times, where transmission overlay
-
-    or wait maybe we have this figured out in the statistics already
+    gets counted within the module 

@@ -90,7 +90,6 @@ bool LoRaReceiver::computeIsReceptionPossible(const IListening *listening, const
 bool LoRaReceiver::computeIsReceptionAttempted(const IListening *listening, const IReception *reception, IRadioSignal::SignalPart part, const IInterference *interference) const
 {
     if (isPacketCollided(reception, part, interference)) {
-        const_cast<LoRaReceiver*>(this)->numCollisions++;
         EV << "Pakets collided" << endl;
         return false;
     }

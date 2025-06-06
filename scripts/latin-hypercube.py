@@ -6,7 +6,7 @@ robot_range = [2, 100]
 msg_range = [1, 60]
 
 # Number of samples
-n_samples = 100
+n_samples = 400
 
 # LHS sampler
 sampler = qmc.LatinHypercube(d=2)

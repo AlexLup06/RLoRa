@@ -2,7 +2,7 @@
 # OMNeT++/OMNEST Makefile for rlora
 #
 # This file was generated with the command:
-#  opp_makemake -f --deep -KINET_4_4_0_PROJ=../../inet-4.4.0 -DINET_IMPORT -I$$\(INET_4_4_0_PROJ\)/src -L$$\(INET_4_4_0_PROJ\)/src -lINET$$\(D\)
+#  opp_makemake -f --deep -KINET_4_4_0_PROJ=../../inet-4.4.0 -KFLORA_1_1_0_PROJ=../../flora-1.1.0 -KRLORA_PROJ=.. -DINET_IMPORT -I$$\(INET_4_4_0_PROJ\)/src -I$$\(FLORA_1_1_0_PROJ\)/src -L$$\(INET_4_4_0_PROJ\)/src -L$$\(FLORA_1_1_0_PROJ\)/src -lINET$$\(D\) -lflora$$\(D\)
 #
 
 # Name of target to be created (-o option)
@@ -19,13 +19,13 @@ USERIF_LIBS = $(ALL_ENV_LIBS) # that is, $(QTENV_LIBS) $(CMDENV_LIBS)
 #USERIF_LIBS = $(QTENV_LIBS)
 
 # C++ include paths (with -I)
-INCLUDE_PATH = -I$(INET_4_4_0_PROJ)/src
+INCLUDE_PATH = -I$(INET_4_4_0_PROJ)/src -I$(FLORA_1_1_0_PROJ)/src
 
 # Additional object and library files to link with
 EXTRA_OBJS =
 
 # Additional libraries (-L, -l options)
-LIBS = $(LDFLAG_LIBPATH)$(INET_4_4_0_PROJ)/src  -lINET$(D)
+LIBS = $(LDFLAG_LIBPATH)$(INET_4_4_0_PROJ)/src $(LDFLAG_LIBPATH)$(FLORA_1_1_0_PROJ)/src  -lINET$(D) -lflora$(D)
 
 # Output directory
 PROJECT_OUTPUT_DIR = ../out
@@ -90,6 +90,8 @@ SMFILES =
 
 # Other makefile variables (-K)
 INET_4_4_0_PROJ=../../inet-4.4.0
+FLORA_1_1_0_PROJ=../../flora-1.1.0
+RLORA_PROJ=..
 
 #------------------------------------------------------------------------------
 
@@ -110,7 +112,7 @@ include $(CONFIGFILE)
 # Simulation kernel and user interface libraries
 OMNETPP_LIBS = $(OPPMAIN_LIB) $(USERIF_LIBS) $(KERNEL_LIBS) $(SYS_LIBS)
 ifneq ($(PLATFORM),win32)
-LIBS += -Wl,-rpath,$(abspath $(INET_4_4_0_PROJ)/src)
+LIBS += -Wl,-rpath,$(abspath $(INET_4_4_0_PROJ)/src) -Wl,-rpath,$(abspath $(FLORA_1_1_0_PROJ)/src)
 endif
 
 COPTS = $(CFLAGS) $(IMPORT_DEFINES) -DINET_IMPORT $(INCLUDE_PATH) -I$(OMNETPP_INCL_DIR)
