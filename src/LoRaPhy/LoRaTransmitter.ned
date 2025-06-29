@@ -23,7 +23,7 @@ module LoRaTransmitter extends NarrowbandTransmitterBase
 
         @signal[LoRaTransmissionCreated](type=bool); // optional
         @statistic[LoRaTransmissionCreated](source=LoRaTransmissionCreated; record=count);
-        @statistic[sentPacketsDuration](source=sentPacketsDuration; record=vector; interpolationmode=none);
+        @statistic[timeOnAir](source=timeOnAir; record=vector; interpolationmode=none;unit=s);
 
         modulation = default("LoRaModulation");
         @class(LoRaTransmitter);

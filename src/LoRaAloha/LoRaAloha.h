@@ -69,8 +69,6 @@ protected:
     simsignal_t throughputSignal;
     simsignal_t effectiveThroughputSignal;
     simsignal_t addedToQueueId;
-    simsignal_t sentId;
-
 
     cMessage *mediumStateChange = nullptr;
     cMessage *droppedPacket = nullptr;

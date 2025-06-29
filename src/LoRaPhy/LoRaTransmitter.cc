@@ -26,39 +26,41 @@ namespace rlora {
 Define_Module(LoRaTransmitter);
 
 LoRaTransmitter::LoRaTransmitter() :
-        FlatTransmitterBase() {
+        FlatTransmitterBase()
+{
 }
 
-void LoRaTransmitter::initialize(int stage) {
+void LoRaTransmitter::initialize(int stage)
+{
     TransmitterBase::initialize(stage);
     if (stage == INITSTAGE_LOCAL) {
         preambleDuration = 0.001; //par("preambleDuration");
+
         headerLength = b(par("headerLength"));
         bitrate = bps(par("bitrate"));
         power = W(par("power"));
         centerFrequency = Hz(par("centerFrequency"));
         bandwidth = Hz(par("bandwidth"));
+
         LoRaTransmissionCreated = registerSignal("LoRaTransmissionCreated");
-        sentPacketsDuration = registerSignal("sentPacketsDuration");
+        timeOnAir = registerSignal("timeOnAir");
 
-
-        if (strcmp(getParentModule()->getClassName(), "rlora::LoRaGWRadio")
-                == 0) {
+        if (strcmp(getParentModule()->getClassName(), "rlora::LoRaGWRadio") == 0) {
             iAmGateway = true;
-        } else
+        }
+        else
             iAmGateway = false;
     }
 }
 
-std::ostream& LoRaTransmitter::printToStream(std::ostream &stream, int level,
-        int evFlags) const {
+std::ostream& LoRaTransmitter::printToStream(std::ostream &stream, int level, int evFlags) const
+{
     stream << "LoRaTransmitter";
     return FlatTransmitterBase::printToStream(stream, level, evFlags);
 }
 
-const ITransmission* LoRaTransmitter::createTransmission(
-        const IRadio *transmitter, const Packet *macFrame,
-        const simtime_t startTime) const {
+const ITransmission* LoRaTransmitter::createTransmission(const IRadio *transmitter, const Packet *macFrame, const simtime_t startTime) const
+{
 //    TransmissionBase *controlInfo = dynamic_cast<TransmissionBase *>(macFrame->getControlInfo());
     //W transmissionPower = controlInfo && !std::isnan(controlInfo->getPower().get()) ? controlInfo->getPower() : power;
     const_cast<LoRaTransmitter*>(this)->emit(LoRaTransmissionCreated, true);
@@ -67,18 +69,15 @@ const ITransmission* LoRaTransmitter::createTransmission(
     const auto &frame = macFrame->peekAtFront<LoRaPhyPreamble>();
 
     int nPreamble = 12;
-    simtime_t Tsym = (pow(2, frame->getSpreadFactor()))
-            / (frame->getBandwidth().get() / 1000);
+    simtime_t Tsym = (pow(2, frame->getSpreadFactor())) / (frame->getBandwidth().get() / 1000);
     simtime_t Tpreamble = (nPreamble + 4.25) * Tsym / 1000;
 
     int payloadBytes = 0;
 
-    const auto &mac = macFrame->peekDataAt<LoRaMacFrame>(
-            frame->getChunkLength());
+    const auto &mac = macFrame->peekDataAt<LoRaMacFrame>(frame->getChunkLength());
     int macSize = B(mac->getChunkLength()).get();
 
-    const auto &payload = macFrame->peekDataAt(
-            frame->getChunkLength() + mac->getChunkLength());
+    const auto &payload = macFrame->peekDataAt(frame->getChunkLength() + mac->getChunkLength());
     int payloadSize = B(payload->getChunkLength()).get();
 
 //    EV << "I am sending " << macSize + payloadSize << "Bytes" << endl;
@@ -86,10 +85,7 @@ const ITransmission* LoRaTransmitter::createTransmission(
     // for us mac header and payload are the "real Payload"
     payloadBytes = payloadSize + macSize;
     int payloadSymbNb = 8;
-    payloadSymbNb += std::ceil(
-            (8 * payloadBytes - 4 * frame->getSpreadFactor() + 28 + 16 - 20 * 0)
-                    / (4 * (frame->getSpreadFactor() - 2 * 0)))
-            * (frame->getCodeRendundance() + 4);
+    payloadSymbNb += std::ceil((8 * payloadBytes - 4 * frame->getSpreadFactor() + 28 + 16 - 20 * 0) / (4 * (frame->getSpreadFactor() - 2 * 0))) * (frame->getCodeRendundance() + 4);
     if (payloadSymbNb < 8)
         payloadSymbNb = 8;
     simtime_t Theader = 0;
@@ -107,18 +103,12 @@ const ITransmission* LoRaTransmitter::createTransmission(
     LoRaRadio *radio = check_and_cast<LoRaRadio*>(getParentModule());
     transmissionPower = mW(math::dBmW2mW(radio->loRaTP));
 
-    EV << "[MSDebug] I am sending packet with TP: " << transmissionPower
-              << endl;
-    EV << "[MSDebug] I am sending packet with SF: " << frame->getSpreadFactor()
-              << endl;
+    EV << "[MSDebug] I am sending packet with TP: " << transmissionPower << endl;
+    EV << "[MSDebug] I am sending packet with SF: " << frame->getSpreadFactor() << endl;
 
-    const_cast<LoRaTransmitter*>(this)->emit(sentPacketsDuration, duration);
+    const_cast<LoRaTransmitter*>(this)->emit(timeOnAir, duration);
 
-    return new LoRaTransmission(transmitter, macFrame, startTime, endTime,
-            Tpreamble, Theader, Tpayload, startPosition, endPosition,
-            startOrientation, endOrientation, transmissionPower,
-            frame->getCenterFrequency(), frame->getSpreadFactor(),
-            frame->getBandwidth(), frame->getCodeRendundance());
+    return new LoRaTransmission(transmitter, macFrame, startTime, endTime, Tpreamble, Theader, Tpayload, startPosition, endPosition, startOrientation, endOrientation, transmissionPower, frame->getCenterFrequency(), frame->getSpreadFactor(), frame->getBandwidth(), frame->getCodeRendundance());
 }
 
 }

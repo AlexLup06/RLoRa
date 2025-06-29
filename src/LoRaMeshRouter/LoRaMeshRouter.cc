@@ -72,6 +72,7 @@ void LoRaMeshRouter::initialize(int stage)
         packetQueue = CustomPacketQueue();
 
         nodeId = intuniform(0, 16777216); //16^6 -1
+
         mediumStateChange = new cMessage("MediumStateChange");
         droppedPacket = new cMessage("Dropped Packet");
         endTransmission = new cMessage("End Transmission");
@@ -79,14 +80,14 @@ void LoRaMeshRouter::initialize(int stage)
         nodeAnnounce = new cMessage("Node Announce");
         transmitSwitchDone = new cMessage("transmitSwitchDone");
         receptionStated = new cMessage("receptionStated");
+        throughputTimer = new cMessage("throughputTimer");
 
         throughputSignal = registerSignal("throughputBps");
         effectiveThroughputSignal = registerSignal("effectiveThroughputBps");
-        sentId = registerSignal("sentId");
-        throughputTimer = new cMessage("throughputTimer");
-//        scheduleAt(simTime() + measurementInterval, throughputTimer);
+        addedToQueueId= registerSignal("addedToQueueId");
 
-//        scheduleAt(intuniform(0, 1000) / 1000.0, nodeAnnounce);
+        scheduleAt(simTime() + measurementInterval, throughputTimer);
+        scheduleAt(intuniform(0, 1000) / 1000.0, nodeAnnounce);
     }
     else if (stage == INITSTAGE_LINK_LAYER) {
         turnOnReceiver();
@@ -471,7 +472,6 @@ void LoRaMeshRouter::sendDataFrame()
         senderWaitDelay(waitTime);
     }
     sendDown(frameToSend);
-    emit(sentId, frameToSend->getId());
 }
 
 /****************************************************************

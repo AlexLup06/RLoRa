@@ -1,4 +1,7 @@
 simulations/results
-simulations/General.anf
 out
+*.anf
 scripts/venv
+*_m.h
+*_m.cc
+

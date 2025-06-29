@@ -30,6 +30,8 @@
 #include "inet/physicallayer/wireless/common/contract/packetlevel/SignalTag_m.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IErrorModel.h"
 
+#include "../helpers/CollisionLogger.h"
+
 namespace rlora {
 
 Define_Module(LoRaMedium);
@@ -40,6 +42,41 @@ LoRaMedium::LoRaMedium() : RadioMedium()
 
 LoRaMedium::~LoRaMedium()
 {
+}
+
+void LoRaMedium::finish(){
+    double receptionCacheHitPercentage = 100 * (double) cacheReceptionHitCount / (double) cacheReceptionGetCount;
+    double interferenceCacheHitPercentage = 100 * (double) cacheInterferenceHitCount / (double) cacheInterferenceGetCount;
+    double noiseCacheHitPercentage = 100 * (double) cacheNoiseHitCount / (double) cacheNoiseGetCount;
+    double snirCacheHitPercentage = 100 * (double) cacheSNIRHitCount / (double) cacheSNIRGetCount;
+    double decisionCacheHitPercentage = 100 * (double) cacheDecisionHitCount / (double) cacheDecisionGetCount;
+    double resultCacheHitPercentage = 100 * (double) cacheResultHitCount / (double) cacheResultGetCount;
+    EV_INFO << "Transmission count = " << transmissionCount << endl;
+    EV_INFO << "Signal send count = " << signalSendCount << endl;
+    EV_INFO << "Reception computation count = " << receptionComputationCount << endl;
+    EV_INFO << "Interference computation count = " << interferenceComputationCount << endl;
+    EV_INFO << "Reception decision computation count = " << receptionDecisionComputationCount << endl;
+    EV_INFO << "Listening decision computation count = " << listeningDecisionComputationCount << endl;
+    EV_INFO << "Reception cache hit = " << receptionCacheHitPercentage << " %" << endl;
+    EV_INFO << "Interference cache hit = " << interferenceCacheHitPercentage << " %" << endl;
+    EV_INFO << "Noise cache hit = " << noiseCacheHitPercentage << " %" << endl;
+    EV_INFO << "SNIR cache hit = " << snirCacheHitPercentage << " %" << endl;
+    EV_INFO << "Reception decision cache hit = " << decisionCacheHitPercentage << " %" << endl;
+    EV_INFO << "Reception result cache hit = " << resultCacheHitPercentage << " %" << endl;
+    recordScalar("transmission count", transmissionCount);
+    recordScalar("signal send count", signalSendCount);
+    recordScalar("reception computation count", receptionComputationCount);
+    recordScalar("interference computation count", interferenceComputationCount);
+    recordScalar("reception decision computation count", receptionDecisionComputationCount);
+    recordScalar("listening decision computation count", listeningDecisionComputationCount);
+    recordScalar("reception cache hit", receptionCacheHitPercentage, "%");
+    recordScalar("interference cache hit", interferenceCacheHitPercentage, "%");
+    recordScalar("noise cache hit", noiseCacheHitPercentage, "%");
+    recordScalar("snir cache hit", snirCacheHitPercentage, "%");
+    recordScalar("reception decision cache hit", decisionCacheHitPercentage, "%");
+    recordScalar("reception result cache hit", resultCacheHitPercentage, "%");
+
+    CollisionLogger::getInstance()->writeToFile("./results/collisions.txt");
 }
 
 bool LoRaMedium::matchesMacAddressFilter(const IRadio *radio, const Packet *packet) const

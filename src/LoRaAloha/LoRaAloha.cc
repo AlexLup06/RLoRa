@@ -79,7 +79,7 @@ void LoRaAloha::initialize(int stage)
 
         throughputSignal = registerSignal("throughputBps");
         effectiveThroughputSignal = registerSignal("effectiveThroughputBps");
-        sentId = registerSignal("sentId");
+        addedToQueueId= registerSignal("addedToQueueId");
 
         scheduleAt(simTime() + measurementInterval, throughputTimer);
         scheduleAt(intuniform(0, 1000) / 1000.0, nodeAnnounce);
@@ -457,7 +457,6 @@ Packet* LoRaAloha::decapsulate(Packet *frame)
 void LoRaAloha::sendDataFrame()
 {
     auto frameToSend = getCurrentTransmission();
-    emit(sentId, frameToSend->getId());
     sendDown(frameToSend);
 }
 
@@ -524,6 +523,7 @@ void LoRaAloha::createBroadcastPacket(int packetSize, int messageId, int hopId, 
     encapsulate(headerPaket);
 
     packetQueue.enqueuePacket(headerPaket);
+    emit(addedToQueueId, headerPaket->getId());
 
     // INFO: das nullte packet ist das was im leader direkt mitgeschickt wird
     int i = 1;
@@ -553,7 +553,7 @@ void LoRaAloha::createBroadcastPacket(int packetSize, int messageId, int hopId, 
 
         encapsulate(fragmentPacket);
         packetQueue.enqueuePacket(fragmentPacket);
-
+        emit(addedToQueueId, fragmentPacket->getId());
     }
 }
 

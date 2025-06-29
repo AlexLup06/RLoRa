@@ -23,7 +23,6 @@ module LoRaCSMA extends CsmaCaMac
         bitrate = 250bps;
 
         @statistic[addedToQueueId](source=addedToQueueId; record=vector; interpolationmode=none);
-        @statistic[sentId](source=sentId; record=vector; interpolationmode=none);
         @statistic[throughputBps](source=throughputBps; record=vector; interpolationmode=none; unit=Bps);
         @statistic[effectiveThroughputBps](source=effectiveThroughputBps; record=vector; interpolationmode=none; unit=Bps);
         

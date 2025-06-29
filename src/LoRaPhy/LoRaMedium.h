@@ -41,6 +41,7 @@ protected:
         //@}
     public:
       LoRaMedium();
+      virtual void finish() override;
       virtual ~LoRaMedium();
       //virtual const IReceptionDecision *getReceptionDecision(const IRadio *receiver, const IListening *listening, const ITransmission *transmission, IRadioSignal::SignalPart part) const override;
       virtual const IReceptionResult *getReceptionResult(const IRadio *receiver, const IListening *listening, const ITransmission *transmission) const override;

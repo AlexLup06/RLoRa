@@ -79,6 +79,7 @@ void LoRaCSMA::initialize(int stage)
         radioModule->subscribe(IRadio::receptionStateChangedSignal, this);
         radioModule->subscribe(IRadio::transmissionStateChangedSignal, this);
         radioModule->subscribe(LoRaRadio::droppedPacket, this);
+
         radio = check_and_cast<IRadio*>(radioModule);
         loRaRadio = check_and_cast<LoRaRadio*>(radioModule);
 
@@ -90,15 +91,18 @@ void LoRaCSMA::initialize(int stage)
         else {
             address.setAddress(addressString);
         }
-        nodeAnnounce = new cMessage("Node Announce");
+
         nodeId = intuniform(0, 16777216); //16^6 -1
-        scheduleAt(intuniform(0, 1000) / 1000.0, nodeAnnounce);
         packetQueue = CustomPacketQueue();
+
+        throughputTimer = new cMessage("throughputTimer");
+        nodeAnnounce = new cMessage("Node Announce");
 
         throughputSignal = registerSignal("throughputBps");
         effectiveThroughputSignal = registerSignal("effectiveThroughputBps");
-        sentId = registerSignal("sentId");
-        throughputTimer = new cMessage("throughputTimer");
+        addedToQueueId= registerSignal("addedToQueueId");
+
+        scheduleAt(intuniform(0, 1000) / 1000.0, nodeAnnounce);
         scheduleAt(simTime() + measurementInterval, throughputTimer);
         //////////////////
         //////////////////
@@ -469,7 +473,6 @@ void LoRaCSMA::sendDataFrame()
     auto frameToSend = getCurrentTransmission();
     if (frameToSend != nullptr) {
         sendDown(frameToSend->dup());
-        emit(sentId, frameToSend->getId());
     }
     frameToSend = nullptr;
     delete frameToSend;
@@ -593,6 +596,7 @@ void LoRaCSMA::createBroadcastPacket(int packetSize, int messageId, int hopId, i
     encapsulate(headerPaket);
 
     packetQueue.enqueuePacket(headerPaket);
+    emit(addedToQueueId, headerPaket->getId());
 
     // INFO: das nullte packet ist das was im leader direkt mitgeschickt wird
     int i = 1;
@@ -622,7 +626,7 @@ void LoRaCSMA::createBroadcastPacket(int packetSize, int messageId, int hopId, i
 
         encapsulate(fragmentPacket);
         packetQueue.enqueuePacket(fragmentPacket);
-
+        emit(addedToQueueId, fragmentPacket->getId());
     }
 }
 

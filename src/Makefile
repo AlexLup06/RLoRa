@@ -53,6 +53,7 @@ OBJS = \
     $O/LoRaPhy/LoRaReception.o \
     $O/LoRaPhy/LoRaTransmission.o \
     $O/LoRaPhy/LoRaTransmitter.o \
+    $O/helpers/CollisionLogger.o \
     $O/helpers/CustomPacketQueue.o \
     $O/helpers/generalHelpers.o \
     $O/helpers/IncompletePacketList.o \

@@ -19,6 +19,8 @@
 #include "LoRaPhyPreamble_m.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/SignalTag_m.h"
 
+#include "../helpers/CollisionLogger.h"
+
 namespace rlora {
 
 Define_Module(LoRaReceiver);
@@ -113,7 +115,12 @@ bool LoRaReceiver::isPacketCollided(const IReception *reception, IRadioSignal::S
     double signalRSSI_dBm = math::mW2dBmW(signalRSSI_mw);
     EV << "Signal RSSI in dBm: " << signalRSSI_dBm << endl;
     int receptionSF = loRaReception->getLoRaSF();
+
+    bool isCollided = false;
     for (auto interferingReception : *interferingReceptions) {
+        int id1=reception->getTransmission()->getId();
+        int id2=interferingReception->getTransmission()->getId();
+
         bool overlap = false;
         bool frequencyCollision = false;
         bool captureEffect = false;
@@ -163,18 +170,21 @@ bool LoRaReceiver::isPacketCollided(const IReception *reception, IRadioSignal::S
         if (overlap && frequencyCollision) {
             if (alohaChannelModel == true) {
                 receiverInstance->emit(receiverInstance->LoRaReceptionCollision, true);
-                return true;
+                isCollided = true;
+                CollisionLogger::getInstance()->logCollision(id1, id2);
             }
             if (alohaChannelModel == false) {
                 if (captureEffect == false && timingCollision) {
                     receiverInstance->emit(receiverInstance->LoRaReceptionCollision, true);
-                    return true;
+                    isCollided = true;
+                    CollisionLogger::getInstance()->logCollision(id1, id2);
+
                 }
             }
 
         }
     }
-    return false;
+    return isCollided;
 }
 
 const IReceptionDecision* LoRaReceiver::computeReceptionDecision(const IListening *listening, const IReception *reception, IRadioSignal::SignalPart part, const IInterference *interference, const ISnir *snir) const

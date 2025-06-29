@@ -38,7 +38,7 @@ class LoRaTransmitter : public FlatTransmitterBase {
         bool iAmGateway;
 
         simsignal_t LoRaTransmissionCreated;
-        simsignal_t sentPacketsDuration;
+        simsignal_t timeOnAir;
 
 };
 
