@@ -20,10 +20,12 @@ namespace rlora {
 
 Define_Module(LoRaLogNormalShadowing);
 
-LoRaLogNormalShadowing::LoRaLogNormalShadowing() {
+LoRaLogNormalShadowing::LoRaLogNormalShadowing()
+{
 }
 
-void LoRaLogNormalShadowing::initialize(int stage) {
+void LoRaLogNormalShadowing::initialize(int stage)
+{
     FreeSpacePathLoss::initialize(stage);
     if (stage == INITSTAGE_LOCAL) {
         sigma = par("sigma");
@@ -32,40 +34,42 @@ void LoRaLogNormalShadowing::initialize(int stage) {
     }
 }
 
-std::ostream& LoRaLogNormalShadowing::printToStream(std::ostream &stream,
-        int level, int evFlags) const {
+std::ostream& LoRaLogNormalShadowing::printToStream(std::ostream &stream, int level, int evFlags) const
+{
     stream << "LoRaLogNormalShadowing";
     if (level <= PRINT_LEVEL_TRACE)
-        stream << ", alpha = " << alpha << ", systemLoss = " << systemLoss
-                << ", sigma = " << sigma;
+        stream << ", alpha = " << alpha << ", systemLoss = " << systemLoss << ", sigma = " << sigma;
     return stream;
 }
 
-double LoRaLogNormalShadowing::computePathLoss(mps propagationSpeed,
-        Hz frequency, m distance) const {
-    // parameters taken from paper "Do LoRa Low-Power Wide-Area Networks Scale?"
-//     double PL_d0_db = 127.41;
-    double PL_d0_db = 115;
-    double PL_db = PL_d0_db + 10 * gamma * log10(unit(distance / d0).get())
-            + normal(0.0, sigma);
-    m maxRange = computeRange(W(0.112202));
-    EV << "Maximal range: " << maxRange << endl;
+
+double LoRaLogNormalShadowing::computePathLoss(mps propagationSpeed, Hz frequency, m distance) const
+{
+    double PL_d0_db = 112;
+    double PL_db = PL_d0_db + 10 * gamma * log10(unit(distance / d0).get()) + normal(0.0, sigma);
+
+    // Compute max communication range using the transmission power
+    m maxRange = computeRange(W(0.112202)); // 0.112202 W = 20.5 dBm total (20 dBm + 0.5 dBi)
+
+    EV << "Distance: " << distance << endl;
+    EV << "maxRange " << maxRange << endl;
+
     return math::dB2fraction(-PL_db);
 }
 
-m LoRaLogNormalShadowing::computeRange(W transmissionPower) const {
-    // parameters taken from paper "Do LoRa Low-Power Wide-Area Networks Scale?"
-    double PL_d0_db = 120;
+m LoRaLogNormalShadowing::computeRange(W transmissionPower) const
+{
+    double PL_d0_db = 112;
     double max_sensitivity = -124.5;
     // war vorher:
-//     double PL_d0_db = 127.41;
-    // double max_sensitivity = -137;
     double trans_power_db = round(10 * log10(transmissionPower.get() * 1000));
-    EV << "LoRaLogNormalShadowing transmissionPower in W = "
-              << transmissionPower << " in dBm = " << trans_power_db << endl;
+
+    EV << "LoRaLogNormalShadowing transmissionPower in W = " << transmissionPower << " in dBm = " << trans_power_db << endl;
+
     double rhs = (trans_power_db - PL_d0_db - max_sensitivity) / (10 * gamma);
     double distance = d0.get() * pow(10, rhs);
     return m(distance);
 }
+
 
 }
