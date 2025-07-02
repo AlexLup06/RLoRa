@@ -45,6 +45,23 @@ void LoRaRadio::initialize(int stage)
     }
 }
 
+void LoRaRadio::finish()
+{
+    cSimulation *sim = getSimulation();
+    cFutureEventSet *fes = sim->getFES();
+    for (int i = 0; i < fes->getLength(); ++i) {
+        cEvent *event = fes->get(i);
+        cMessage *msg = dynamic_cast<cMessage*>(event);
+        if (msg != nullptr) {
+            cModule *mod = msg->getArrivalModule();
+            if (msg && msg->isScheduled() && msg->getOwner() == this) {
+                cancelAndDelete(msg);
+                msg = nullptr;
+            }
+        }
+    }
+}
+
 LoRaRadio::~LoRaRadio()
 {
 }
@@ -210,10 +227,15 @@ void LoRaRadio::handleUpperPacket(Packet *packet)
 void LoRaRadio::handleSignal(WirelessSignal *radioFrame)
 {
     auto receptionTimer = createReceptionTimer(radioFrame);
-    if (separateReceptionParts)
+    if (separateReceptionParts) {
         startReception(receptionTimer, IRadioSignal::SIGNAL_PART_PREAMBLE);
-    else
+        EV << "Starting Preamble" << endl;
+    }
+    else {
+        EV << "Starting Whole" << endl;
         startReception(receptionTimer, IRadioSignal::SIGNAL_PART_WHOLE);
+    }
+
 }
 
 /*

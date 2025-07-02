@@ -188,6 +188,20 @@ void LoRaCSMA::finish()
     }
 
     currentTxFrame = nullptr;
+
+    cSimulation *sim = getSimulation();
+    cFutureEventSet *fes = sim->getFES();
+    for (int i = 0; i < fes->getLength(); ++i) {
+        cEvent *event = fes->get(i);
+        cMessage *msg = dynamic_cast<cMessage*>(event);
+        if (msg != nullptr) {
+            cModule *mod = msg->getArrivalModule();
+            if (msg && msg->isScheduled() && msg->getOwner() == this) {
+                cancelAndDelete(msg);
+                msg = nullptr;
+            }
+        }
+    }
 }
 
 void LoRaCSMA::configureNetworkInterface()

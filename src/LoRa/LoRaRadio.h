@@ -32,100 +32,129 @@ namespace rlora {
 class LoRaRadio : public NarrowbandRadioBase //: public PhysicalLayerBase, public virtual IRadio
 {
 public:
-  static simsignal_t minSNIRSignal;
-  static simsignal_t packetErrorRateSignal;
-  static simsignal_t bitErrorRateSignal;
-  static simsignal_t symbolErrorRateSignal;
-  static simsignal_t droppedPacket;
+    static simsignal_t minSNIRSignal;
+    static simsignal_t packetErrorRateSignal;
+    static simsignal_t bitErrorRateSignal;
+    static simsignal_t symbolErrorRateSignal;
+    static simsignal_t droppedPacket;
 
 public:
-  /**
-   * An identifier which is globally unique for the whole lifetime of the
-   * simulation among all radios.
-   */
+    /**
+     * An identifier which is globally unique for the whole lifetime of the
+     * simulation among all radios.
+     */
 //  double currentTxPower;
-  //LoRa physical layer parameters
-  double loRaTP;
-  units::values::Hz loRaCF;
-  int loRaSF;
-  units::values::Hz loRaBW;
-  int loRaCR;
-  bool loRaUseHeader;
+    //LoRa physical layer parameters
+    double loRaTP;
+    units::values::Hz loRaCF;
+    int loRaSF;
+    units::values::Hz loRaBW;
+    int loRaCR;
+    bool loRaUseHeader;
 
 private:
-  void parseRadioModeSwitchingTimes();
-  void startRadioModeSwitch(RadioMode newRadioMode, simtime_t switchingTime);
+    void parseRadioModeSwitchingTimes();
+    void startRadioModeSwitch(RadioMode newRadioMode, simtime_t switchingTime);
 
 protected:
-  virtual void initialize(int stage) override;
+    virtual void initialize(int stage) override;
+    virtual void finish() override;
 
-  virtual void handleMessageWhenDown(cMessage *message) override;
-  virtual void handleMessageWhenUp(cMessage *message) override;
-  virtual void handleSelfMessage(cMessage *message) override;
-  virtual void handleTransmissionTimer(cMessage *message) override;
-  virtual void handleReceptionTimer(cMessage *message) override;
-  virtual void handleUpperCommand(cMessage *command) override;
-  virtual void handleLowerCommand(cMessage *command) override;
-  virtual void handleUpperPacket(Packet *packet) override;
-  //virtual void handleLowerPacket(RadioFrame *packet) override;
-  virtual void handleSignal(WirelessSignal *signal) override;
-  //virtual bool handleNodeStart(IDoneCallback *doneCallback) override;
-  //virtual bool handleNodeShutdown(IDoneCallback *doneCallback) override;
-  //virtual void handleNodeCrash() override;
+    virtual void handleMessageWhenDown(cMessage *message) override;
+    virtual void handleMessageWhenUp(cMessage *message) override;
+    virtual void handleSelfMessage(cMessage *message) override;
+    virtual void handleTransmissionTimer(cMessage *message) override;
+    virtual void handleReceptionTimer(cMessage *message) override;
+    virtual void handleUpperCommand(cMessage *command) override;
+    virtual void handleLowerCommand(cMessage *command) override;
+    virtual void handleUpperPacket(Packet *packet) override;
+    //virtual void handleLowerPacket(RadioFrame *packet) override;
+    virtual void handleSignal(WirelessSignal *signal) override;
+    //virtual bool handleNodeStart(IDoneCallback *doneCallback) override;
+    //virtual bool handleNodeShutdown(IDoneCallback *doneCallback) override;
+    //virtual void handleNodeCrash() override;
 
-  //virtual void handleStartOperation(LifecycleOperation *operation) override;
-  //virtual void handleStopOperation(LifecycleOperation *operation) override;
-  //virtual void handleCrashOperation(LifecycleOperation *operation) override;
+    //virtual void handleStartOperation(LifecycleOperation *operation) override;
+    //virtual void handleStopOperation(LifecycleOperation *operation) override;
+    //virtual void handleCrashOperation(LifecycleOperation *operation) override;
 
+    virtual void startTransmission(Packet *macFrame, IRadioSignal::SignalPart part) override;
+    virtual void continueTransmission() override;
+    virtual void endTransmission() override;
+    virtual void abortTransmission() override;
 
-  virtual void startTransmission(Packet *macFrame, IRadioSignal::SignalPart part) override;
-  virtual void continueTransmission() override;
-  virtual void endTransmission() override;
-  virtual void abortTransmission() override;
+    virtual WirelessSignal* createSignal(Packet *packet) const override;
 
-  virtual WirelessSignal *createSignal(Packet *packet) const override;
+    virtual void startReception(cMessage *timer, IRadioSignal::SignalPart part) override;
+    virtual void continueReception(cMessage *timer) override;
+    virtual void endReception(cMessage *timer) override;
+    virtual void abortReception(cMessage *timer) override;
+    virtual void captureReception(cMessage *timer) override;
 
-  virtual void startReception(cMessage *timer, IRadioSignal::SignalPart part) override;
-  virtual void continueReception(cMessage *timer) override;
-  virtual void endReception(cMessage *timer) override;
-  virtual void abortReception(cMessage *timer) override;
-  virtual void captureReception(cMessage *timer) override;
-
-  virtual void sendUp(Packet *macFrame) override;
+    virtual void sendUp(Packet *macFrame) override;
 
 public:
-  LoRaRadio() { }
-  virtual ~LoRaRadio();
+    LoRaRadio()
+    {
+    }
+    virtual ~LoRaRadio();
 
-  bool iAmGateway;
+    bool iAmGateway;
 //  double getCurrentTxPower();
 //  void setCurrentTxPower(double txPower);
 
-  std::list<cMessage *>concurrentReceptions;
+    std::list<cMessage*> concurrentReceptions;
 
-  virtual int getId() const override { return id; }
+    virtual int getId() const override
+    {
+        return id;
+    }
 
-  virtual std::ostream& printToStream(std::ostream& stream, int level, int evFlags = 0) const override;
+    virtual std::ostream& printToStream(std::ostream &stream, int level, int evFlags = 0) const override;
 
-  virtual const IAntenna *getAntenna() const override { return antenna; }
-  virtual const ITransmitter *getTransmitter() const override { return transmitter; }
-  virtual const IReceiver *getReceiver() const override { return receiver; }
-  virtual const IRadioMedium *getMedium() const override { return medium; }
+    virtual const IAntenna* getAntenna() const override
+    {
+        return antenna;
+    }
+    virtual const ITransmitter* getTransmitter() const override
+    {
+        return transmitter;
+    }
+    virtual const IReceiver* getReceiver() const override
+    {
+        return receiver;
+    }
+    virtual const IRadioMedium* getMedium() const override
+    {
+        return medium;
+    }
 
-  virtual const cGate *getRadioGate() const override { return radioIn; }
+    virtual const cGate* getRadioGate() const override
+    {
+        return radioIn;
+    }
 
-  virtual RadioMode getRadioMode() const override { return radioMode; }
+    virtual RadioMode getRadioMode() const override
+    {
+        return radioMode;
+    }
 
-  virtual ReceptionState getReceptionState() const override { return receptionState; }
-  virtual TransmissionState getTransmissionState() const override { return transmissionState; }
+    virtual ReceptionState getReceptionState() const override
+    {
+        return receptionState;
+    }
+    virtual TransmissionState getTransmissionState() const override
+    {
+        return transmissionState;
+    }
 
-  virtual const ITransmission *getTransmissionInProgress() const override;
-  virtual const ITransmission *getReceptionInProgress() const override;
+    virtual const ITransmission* getTransmissionInProgress() const override;
+    virtual const ITransmission* getReceptionInProgress() const override;
 
-  virtual IRadioSignal::SignalPart getTransmittedSignalPart() const override;
-  virtual IRadioSignal::SignalPart getReceivedSignalPart() const override;
+    virtual IRadioSignal::SignalPart getTransmittedSignalPart() const override;
+    virtual IRadioSignal::SignalPart getReceivedSignalPart() const override;
 
-  virtual void decapsulate(Packet *packet) const override;
+    virtual void decapsulate(Packet *packet) const override;
 };
 
 } // namespace inet
