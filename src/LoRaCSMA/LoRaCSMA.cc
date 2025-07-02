@@ -166,12 +166,11 @@ void LoRaCSMA::finish()
 
     cancelAndDelete(receptionStated);
     cancelAndDelete(transmitSwitchDone);
-    cancelAndDelete(nodeAnnounce);
     cancelAndDelete(mediumStateChange);
-    cancelAndDelete(throughputTimer);
     cancelAndDelete(endBackoff);
     cancelAndDelete(endData);
-    cancelAndDelete(mediumStateChange);
+    cancelAndDelete(throughputTimer);
+    cancelAndDelete(nodeAnnounce);
 
     receptionStated = nullptr;
     transmitSwitchDone = nullptr;
