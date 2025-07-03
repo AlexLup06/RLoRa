@@ -76,7 +76,8 @@ void LoRaMedium::finish(){
     recordScalar("reception decision cache hit", decisionCacheHitPercentage, "%");
     recordScalar("reception result cache hit", resultCacheHitPercentage, "%");
 
-    CollisionLogger::getInstance()->writeToFile("./results/collisions.txt");
+    string pathToCollisions = par("pathToCollisions");
+    CollisionLogger::getInstance()->writeToFile(pathToCollisions);
 }
 
 bool LoRaMedium::matchesMacAddressFilter(const IRadio *radio, const Packet *packet) const

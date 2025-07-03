@@ -32,5 +32,7 @@ module LoRaMedium extends RadioMedium
         // TODO couple with sensitivity
         backgroundNoise.power = default(-96.616dBm);
         backgroundNoise.dimensions = default("time");
+        
+        string pathToCollisions = default("");
         @class(LoRaMedium);
 }

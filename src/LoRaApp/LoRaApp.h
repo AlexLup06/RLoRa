@@ -23,7 +23,7 @@
 #include "inet/common/lifecycle/LifecycleOperation.h"
 
 #include "../LoRa/LoRaRadio.h"
-#include "LoRaRobotpacket_m.h"
+#include "LoRaRobotPacket_m.h"
 
 using namespace omnetpp;
 using namespace inet;
