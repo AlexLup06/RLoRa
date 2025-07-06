@@ -52,7 +52,9 @@ protected:
     cMessage *throughputTimer = nullptr;
     simsignal_t throughputSignal;
     simsignal_t effectiveThroughputSignal;
-    simsignal_t addedToQueueId;
+    simsignal_t timeInQueue;
+
+    map<int, SimTime> idToAddedTimeMap;
 
     cMessage *waitDelay = nullptr;
     cMessage *mediumStateChange = nullptr;

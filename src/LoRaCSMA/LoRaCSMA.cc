@@ -100,7 +100,7 @@ void LoRaCSMA::initialize(int stage)
 
         throughputSignal = registerSignal("throughputBps");
         effectiveThroughputSignal = registerSignal("effectiveThroughputBps");
-        addedToQueueId= registerSignal("addedToQueueId");
+        timeInQueue = registerSignal("timeInQueue");
 
         scheduleAt(intuniform(0, 1000) / 1000.0, nodeAnnounce);
         scheduleAt(simTime() + measurementInterval, throughputTimer);
@@ -487,6 +487,13 @@ void LoRaCSMA::sendDataFrame()
     if (frameToSend != nullptr) {
         sendDown(frameToSend->dup());
     }
+
+    if (idToAddedTimeMap.find(frameToSend->getId()) != idToAddedTimeMap.end()) {
+        SimTime previousTime = idToAddedTimeMap[frameToSend->getId()];
+        SimTime delta = simTime() - previousTime;
+        emit(timeInQueue, delta);
+    }
+
     frameToSend = nullptr;
     delete frameToSend;
 }
@@ -608,8 +615,10 @@ void LoRaCSMA::createBroadcastPacket(int packetSize, int messageId, int hopId, i
 
     encapsulate(headerPaket);
 
-    packetQueue.enqueuePacket(headerPaket);
-    emit(addedToQueueId, headerPaket->getId());
+    bool trackQueueTime = packetQueue.enqueuePacket(headerPaket);
+    if (trackQueueTime) {
+        idToAddedTimeMap[headerPaket->getId()] = simTime();
+    }
 
     // INFO: das nullte packet ist das was im leader direkt mitgeschickt wird
     int i = 1;
@@ -639,7 +648,9 @@ void LoRaCSMA::createBroadcastPacket(int packetSize, int messageId, int hopId, i
 
         encapsulate(fragmentPacket);
         packetQueue.enqueuePacket(fragmentPacket);
-        emit(addedToQueueId, fragmentPacket->getId());
+        if (trackQueueTime) {
+            idToAddedTimeMap[fragmentPacket->getId()] = simTime();
+        }
     }
 }
 

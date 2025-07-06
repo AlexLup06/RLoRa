@@ -84,7 +84,7 @@ void LoRaMeshRouter::initialize(int stage)
 
         throughputSignal = registerSignal("throughputBps");
         effectiveThroughputSignal = registerSignal("effectiveThroughputBps");
-        addedToQueueId = registerSignal("addedToQueueId");
+        timeInQueue = registerSignal("timeInQueue");
 
         scheduleAt(simTime() + measurementInterval, throughputTimer);
         scheduleAt(intuniform(0, 1000) / 1000.0, nodeAnnounce);
@@ -440,6 +440,8 @@ Packet* LoRaMeshRouter::encapsulate(Packet *msg)
     frame->setChunkLength(B(0));
     msg->setArrival(msg->getArrivalModuleId(), msg->getArrivalGateId());
 
+    EV << "Byte length: " << msg->getByteLength() << endl;
+
     auto tag = msg->addTagIfAbsent<LoRaTag>();
     tag->setBandwidth(loRaRadio->loRaBW);
     tag->setCenterFrequency(loRaRadio->loRaCF);
@@ -486,6 +488,12 @@ void LoRaMeshRouter::sendDataFrame()
         senderWaitDelay(waitTime);
     }
     sendDown(frameToSend);
+
+    if (idToAddedTimeMap.find(frameToSend->getId()) != idToAddedTimeMap.end()) {
+        SimTime previousTime = idToAddedTimeMap[frameToSend->getId()];
+        SimTime delta = simTime() - previousTime;
+        emit(timeInQueue, delta);
+    }
 }
 
 /****************************************************************
@@ -547,8 +555,10 @@ void LoRaMeshRouter::createBroadcastPacket(int packetSize, int messageId, int ho
     waitTimeTag->setWaitTime(150);
 
     auto headerEncap = encapsulate(headerPaket);
-    packetQueue.enqueuePacket(headerEncap);
-    emit(addedToQueueId, headerEncap->getId());
+    bool trackQueueTime = packetQueue.enqueuePacket(headerEncap);
+    if (trackQueueTime) {
+        idToAddedTimeMap[headerEncap->getId()] = simTime();
+    }
 
     int i = 0;
     while (packetSize > 0) {
@@ -587,7 +597,9 @@ void LoRaMeshRouter::createBroadcastPacket(int packetSize, int messageId, int ho
 
         auto fragmentEncap = encapsulate(fragmentPacket);
         packetQueue.enqueuePacket(fragmentEncap);
-        emit(addedToQueueId, fragmentEncap->getId());
+        if (trackQueueTime) {
+            idToAddedTimeMap[fragmentEncap->getId()] = simTime();
+        }
     }
 }
 
@@ -609,7 +621,6 @@ void LoRaMeshRouter::announceNodeId(int respond)
 
     auto fragmentEncap = encapsulate(nodeAnnouncePacket);
     packetQueue.enqueuePacket(fragmentEncap);
-    emit(addedToQueueId, fragmentEncap->getId());
 }
 
 bool LoRaMeshRouter::isReceiving()

@@ -64,6 +64,9 @@ const ITransmission* LoRaTransmitter::createTransmission(const IRadio *transmitt
 //    TransmissionBase *controlInfo = dynamic_cast<TransmissionBase *>(macFrame->getControlInfo());
     //W transmissionPower = controlInfo && !std::isnan(controlInfo->getPower().get()) ? controlInfo->getPower() : power;
     const_cast<LoRaTransmitter*>(this)->emit(LoRaTransmissionCreated, true);
+
+    EV << "[MSDebug] I am sending packet with Frame Bzte: " << macFrame->getByteLength() << endl;
+
 //    const LoRaMacFrame *frame = check_and_cast<const LoRaMacFrame *>(macFrame);
     EV << macFrame->getDetailStringRepresentation(evFlags) << endl;
     const auto &frame = macFrame->peekAtFront<LoRaPhyPreamble>();
@@ -78,12 +81,13 @@ const ITransmission* LoRaTransmitter::createTransmission(const IRadio *transmitt
     int macSize = B(mac->getChunkLength()).get();
 
     const auto &payload = macFrame->peekDataAt(frame->getChunkLength() + mac->getChunkLength());
-    int payloadSize = B(payload->getChunkLength()).get();
+
+    int payloadSize = B(macFrame->getByteLength()).get();
 
 //    EV << "I am sending " << macSize + payloadSize << "Bytes" << endl;
 
     // for us mac header and payload are the "real Payload"
-    payloadBytes = payloadSize + macSize;
+    payloadBytes = payloadSize;
     int payloadSymbNb = 8;
     payloadSymbNb += std::ceil((8 * payloadBytes - 4 * frame->getSpreadFactor() + 28 + 16 - 20 * 0) / (4 * (frame->getSpreadFactor() - 2 * 0))) * (frame->getCodeRendundance() + 4);
     if (payloadSymbNb < 8)
@@ -105,6 +109,8 @@ const ITransmission* LoRaTransmitter::createTransmission(const IRadio *transmitt
 
     EV << "[MSDebug] I am sending packet with TP: " << transmissionPower << endl;
     EV << "[MSDebug] I am sending packet with SF: " << frame->getSpreadFactor() << endl;
+    EV << "[MSDebug] I am sending packet with Duration: " << duration << endl;
+    EV << "[MSDebug] I am sending packet with Bytes: " << payloadBytes << endl;
 
     const_cast<LoRaTransmitter*>(this)->emit(timeOnAir, duration);
 
