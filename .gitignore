@@ -4,4 +4,5 @@ out
 scripts/venv
 *_m.h
 *_m.cc
-data
+data/**/*.txt
+data/**/*.json
