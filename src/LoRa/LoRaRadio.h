@@ -38,6 +38,9 @@ public:
     static simsignal_t symbolErrorRateSignal;
     static simsignal_t droppedPacket;
 
+    simsignal_t bytesReceived;
+    simsignal_t receivedId;
+
 public:
     /**
      * An identifier which is globally unique for the whole lifetime of the

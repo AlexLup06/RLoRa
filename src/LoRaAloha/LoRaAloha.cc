@@ -80,6 +80,8 @@ void LoRaAloha::initialize(int stage)
         throughputSignal = registerSignal("throughputBps");
         effectiveThroughputSignal = registerSignal("effectiveThroughputBps");
         timeInQueue = registerSignal("timeInQueue");
+        sentMissionId = registerSignal("sentMissionId");
+        receivedMissionId = registerSignal("receivedMissionId");
 
         scheduleAt(simTime() + measurementInterval, throughputTimer);
         scheduleAt(intuniform(0, 1000) / 1000.0, nodeAnnounce);
@@ -464,6 +466,11 @@ void LoRaAloha::sendDataFrame()
         SimTime delta = simTime() - previousTime;
         emit(timeInQueue, delta);
     }
+
+    if (missionIds.count(frameToSend->getId())) {
+        emit(sentMissionId, frameToSend->getId());
+        missionIds.erase(frameToSend->getId());
+    }
 }
 
 /****************************************************************
@@ -488,6 +495,7 @@ void LoRaAloha::retransmitPacket(FragmentedPacket fragmentedPacket)
     if (!fragmentedPacket.retransmit || fragmentedPacket.sourceNode == nodeId) {
         return;
     }
+    emit(receivedMissionId, fragmentedPacket.messageId);
     createBroadcastPacket(fragmentedPacket.size, fragmentedPacket.messageId, nodeId, fragmentedPacket.sourceNode, fragmentedPacket.retransmit);
 }
 
@@ -531,6 +539,9 @@ void LoRaAloha::createBroadcastPacket(int packetSize, int messageId, int hopId, 
     bool trackQueueTime = packetQueue.enqueuePacket(headerPaket);
     if (trackQueueTime) {
         idToAddedTimeMap[headerPaket->getId()] = simTime();
+    }
+    if (retransmit) {
+        missionIds.insert(messageId);
     }
 
     // INFO: das nullte packet ist das was im leader direkt mitgeschickt wird

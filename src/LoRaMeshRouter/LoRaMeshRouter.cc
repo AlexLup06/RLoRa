@@ -85,6 +85,8 @@ void LoRaMeshRouter::initialize(int stage)
         throughputSignal = registerSignal("throughputBps");
         effectiveThroughputSignal = registerSignal("effectiveThroughputBps");
         timeInQueue = registerSignal("timeInQueue");
+        sentMissionId = registerSignal("sentMissionId");
+        receivedMissionId = registerSignal("receivedMissionId");
 
         scheduleAt(simTime() + measurementInterval, throughputTimer);
         scheduleAt(intuniform(0, 1000) / 1000.0, nodeAnnounce);
@@ -494,6 +496,11 @@ void LoRaMeshRouter::sendDataFrame()
         SimTime delta = simTime() - previousTime;
         emit(timeInQueue, delta);
     }
+
+    if (missionIds.count(frameToSend->getId())) {
+        emit(sentMissionId, frameToSend->getId());
+        missionIds.erase(frameToSend->getId());
+    }
 }
 
 /****************************************************************
@@ -518,6 +525,7 @@ void LoRaMeshRouter::retransmitPacket(FragmentedPacket fragmentedPacket)
     if (!fragmentedPacket.retransmit || fragmentedPacket.sourceNode == nodeId) {
         return;
     }
+    emit(receivedMissionId, fragmentedPacket.messageId);
     createBroadcastPacket(fragmentedPacket.size, fragmentedPacket.messageId, nodeId, fragmentedPacket.sourceNode, fragmentedPacket.retransmit);
 }
 
@@ -558,6 +566,9 @@ void LoRaMeshRouter::createBroadcastPacket(int packetSize, int messageId, int ho
     bool trackQueueTime = packetQueue.enqueuePacket(headerEncap);
     if (trackQueueTime) {
         idToAddedTimeMap[headerEncap->getId()] = simTime();
+    }
+    if (retransmit) {
+        missionIds.insert(messageId);
     }
 
     int i = 0;

@@ -68,8 +68,11 @@ protected:
     simsignal_t throughputSignal;
     simsignal_t effectiveThroughputSignal;
     simsignal_t timeInQueue;
+    simsignal_t sentMissionId;
+    simsignal_t receivedMissionId;
 
     map<int, SimTime> idToAddedTimeMap;
+    unordered_set<int> missionIds;
     /**
      * @name LoRaCSMA state variables
      * Various state information checked and modified according to the state machine.

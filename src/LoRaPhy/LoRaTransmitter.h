@@ -39,6 +39,7 @@ class LoRaTransmitter : public FlatTransmitterBase {
 
         simsignal_t LoRaTransmissionCreated;
         simsignal_t timeOnAir;
+        simsignal_t sentId;
 
 };
 

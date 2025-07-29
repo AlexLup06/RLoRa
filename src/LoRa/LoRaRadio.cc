@@ -27,7 +27,6 @@
 #include "../LoRaPhy/LoRaReceiver.h"
 #include "../LoRaPhy/LoRaPhyPreamble_m.h"
 
-
 namespace rlora {
 
 Define_Module(LoRaRadio);
@@ -43,6 +42,9 @@ void LoRaRadio::initialize(int stage)
     NarrowbandRadioBase::initialize(stage);
     if (stage == INITSTAGE_LOCAL) {
         iAmGateway = par("iAmGateway").boolValue();
+
+        bytesReceived = registerSignal("bytesReceived");
+        receivedId = registerSignal("receivedId");
     }
 }
 
@@ -347,61 +349,57 @@ WirelessSignal* LoRaRadio::createSignal(Packet *packet) const
 
 void LoRaRadio::startReception(cMessage *timer, IRadioSignal::SignalPart part)
 {
-    NarrowbandRadioBase::startReception(timer, part);
-    /*    auto signal = static_cast<Signal *>(timer->getControlInfo());
-     auto arrival = signal->getArrival();
-     auto reception = signal->getReception();
-     // TODO: should be this, but it breaks fingerprints: if (receptionTimer == nullptr && isReceiverMode(radioMode) && arrival->getStartTime(part) == simTime()) {
-     if (isReceiverMode(radioMode) && arrival->getStartTime(part) == simTime()) {
-     auto transmission = signal->getTransmission();
-     auto isReceptionAttempted = medium->isReceptionAttempted(this, transmission, part);
-     EV_INFO << "Reception started: " << (isReceptionAttempted ? "attempting" : "not attempting") << " " << (ISignal *)signal << " " << IRadioSignal::getSignalPartName(part) << " as " << reception << endl;
-     if (isReceptionAttempted)
-     {
-     receptionTimer = timer;
-     emit(receptionStartedSignal, check_and_cast<const cObject *>(reception));
-     }
-     }
-     else
-     EV_INFO << "Reception started: ignoring " << (ISignal *)signal << " " << IRadioSignal::getSignalPartName(part) << " as " << reception << endl;
-     timer->setKind(part);
-     scheduleAt(arrival->getEndTime(part), timer);
-     updateTransceiverState();
-     updateTransceiverPart();
-     //check_and_cast<LoRaMedium *>(medium)->fireReceptionStarted(reception);
-     //check_and_cast<RadioMedium *>(medium)->emit(receptionStartedSignal, check_and_cast<const cObject *>(reception));
-     check_and_cast<LoRaMedium *>(medium)->emit(IRadioMedium::signalArrivalStartedSignal, check_and_cast<const cObject *>(reception));
-     */
+    auto signal = static_cast<WirelessSignal*>(timer->getControlInfo());
+    auto arrival = signal->getArrival();
+    auto reception = signal->getReception();
+    // TODO should be this, but it breaks fingerprints: if (receptionTimer == nullptr && isReceiverMode(radioMode) && arrival->getStartTime(part) == simTime()) {
+    if (isReceiverMode(radioMode) && arrival->getStartTime(part) == simTime()) {
+        auto transmission = signal->getTransmission();
+        auto isReceptionInRange = medium->isReceptionPossible(this, transmission, part); // we only check if in range and not whether it has collided
+        EV_INFO << "Reception started: " << (isReceptionInRange ? "\x1b[1mattempting\x1b[0m" : "\x1b[1mnot attempting\x1b[0m") << " " << (IWirelessSignal*) signal << " " << IRadioSignal::getSignalPartName(part) << " as " << reception << endl;
+        if (isReceptionInRange) {
+            receptionTimer = timer;
+            emit(receptionStartedSignal, check_and_cast<const cObject*>(reception));
+        }
+    }
+    else
+        EV_INFO << "Reception started: \x1b[1mignoring\x1b[0m " << (IWirelessSignal*) signal << " " << IRadioSignal::getSignalPartName(part) << " as " << reception << endl;
+    timer->setKind(part);
+    scheduleAt(arrival->getEndTime(part), timer);
+    updateTransceiverState();
+    updateTransceiverPart();
+    // TODO move to radio medium
+    check_and_cast<RadioMedium*>(medium.get())->emit(IRadioMedium::signalArrivalStartedSignal, check_and_cast<const cObject*>(reception));
 }
 
 void LoRaRadio::continueReception(cMessage *timer)
 {
-    NarrowbandRadioBase::continueReception(timer);
-    /*   auto previousPart = (IRadioSignal::SignalPart)timer->getKind();
-     auto nextPart = (IRadioSignal::SignalPart)(previousPart + 1);
-     auto radioFrame = static_cast<Signal *>(timer->getControlInfo());
-     auto arrival = radioFrame->getArrival();
-     auto reception = radioFrame->getReception();
-     if (timer == receptionTimer && isReceiverMode(radioMode) && arrival->getEndTime(previousPart) == simTime()) {
-     auto transmission = radioFrame->getTransmission();
-     bool isReceptionSuccessful = medium->isReceptionSuccessful(this, transmission, previousPart);
-     EV_INFO << "Reception ended: " << (isReceptionSuccessful ? "successfully" : "unsuccessfully") << " for " << (ISignal *)radioFrame << " " << IRadioSignal::getSignalPartName(previousPart) << " as " << reception << endl;
-     if (!isReceptionSuccessful)
-     receptionTimer = nullptr;
-     auto isReceptionAttempted = medium->isReceptionAttempted(this, transmission, nextPart);
-     EV_INFO << "Reception started: " << (isReceptionAttempted ? "attempting" : "not attempting") << " " << (ISignal *)radioFrame << " " << IRadioSignal::getSignalPartName(nextPart) << " as " << reception << endl;
-     if (!isReceptionAttempted)
-     receptionTimer = nullptr;
-     }
-     else {
-     EV_INFO << "Reception ended: ignoring " << (ISignal *)radioFrame << " " << IRadioSignal::getSignalPartName(previousPart) << " as " << reception << endl;
-     EV_INFO << "Reception started: ignoring " << (ISignal *)radioFrame << " " << IRadioSignal::getSignalPartName(nextPart) << " as " << reception << endl;
-     }
-     timer->setKind(nextPart);
-     scheduleAt(arrival->getEndTime(nextPart), timer);
-     updateTransceiverState();
-     updateTransceiverPart();
-     */
+
+    auto previousPart = (IRadioSignal::SignalPart) timer->getKind();
+    auto nextPart = (IRadioSignal::SignalPart) (previousPart + 1);
+    auto signal = static_cast<WirelessSignal*>(timer->getControlInfo());
+    auto arrival = signal->getArrival();
+    auto reception = signal->getReception();
+    if (timer == receptionTimer && isReceiverMode(radioMode) && arrival->getEndTime(previousPart) == simTime()) {
+        auto transmission = signal->getTransmission();
+        bool isReceptionSuccessful = medium->isReceptionSuccessful(this, transmission, previousPart);
+        EV_INFO << "Reception ended: " << (isReceptionSuccessful ? "\x1b[1msuccessfully\x1b[0m" : "\x1b[1munsuccessfully\x1b[0m") << " for " << (IWirelessSignal*) signal << " " << IRadioSignal::getSignalPartName(previousPart) << " as " << reception << endl;
+        if (!isReceptionSuccessful)
+            receptionTimer = nullptr;
+        auto isReceptionAttempted = medium->isReceptionAttempted(this, transmission, nextPart);
+        EV_INFO << "Reception started: " << (isReceptionAttempted ? "\x1b[1mattempting\x1b[0m" : "\x1b[1mnot attempting\x1b[0m") << " " << (IWirelessSignal*) signal << " " << IRadioSignal::getSignalPartName(nextPart) << " as " << reception << endl;
+        if (!isReceptionAttempted)
+            receptionTimer = nullptr;
+        // FIXME see handling packets with incorrect PHY headers in the TODO file
+    }
+    else {
+        EV_INFO << "Reception ended: \x1b[1mignoring\x1b[0m " << (IWirelessSignal*) signal << " " << IRadioSignal::getSignalPartName(previousPart) << " as " << reception << endl;
+        EV_INFO << "Reception started: \x1b[1mignoring\x1b[0m " << (IWirelessSignal*) signal << " " << IRadioSignal::getSignalPartName(nextPart) << " as " << reception << endl;
+    }
+    timer->setKind(nextPart);
+    scheduleAt(arrival->getEndTime(nextPart), timer);
+    updateTransceiverState();
+    updateTransceiverPart();
 }
 
 void LoRaRadio::decapsulate(Packet *packet) const
@@ -427,11 +425,22 @@ void LoRaRadio::endReception(cMessage *timer)
     if (timer == receptionTimer && isReceiverMode(radioMode) && arrival->getEndTime() == simTime()) {
         auto transmission = signal->getTransmission();
         // TODO: this would draw twice from the random number generator in isReceptionSuccessful: auto isReceptionSuccessful = medium->isReceptionSuccessful(this, transmission, part);
-        auto isReceptionSuccessful = medium->getReceptionDecision(this, signal->getListening(), transmission, part)->isReceptionSuccessful();
+        auto receptionDecision = medium->getReceptionDecision(this, signal->getListening(), transmission, part);
+        bool isReceptionSuccessful = receptionDecision->isReceptionSuccessful();
+        bool isReceptionPossible = receptionDecision->isReceptionPossible();
+        bool isReceptionAttempted = receptionDecision->isReceptionAttempted();
+
         EV_INFO << "Reception ended: " << (isReceptionSuccessful ? "\x1b[1msuccessfully\x1b[0m" : "\x1b[1munsuccessfully\x1b[0m") << " for " << (IWirelessSignal*) signal << " " << IRadioSignal::getSignalPartName(part) << " as " << reception << endl;
         auto macFrame = medium->receivePacket(this, signal);
         take(macFrame);
         decapsulate(macFrame);
+        int multiplier = 1;
+        if (isReceptionPossible && !isReceptionAttempted) {
+            multiplier = -1;
+        }
+        emit(bytesReceived, multiplier * macFrame->getByteLength());
+        emit(receivedId, multiplier * macFrame->getId());
+
         if (isReceptionSuccessful)
             sendUp(macFrame);
         else {
@@ -440,13 +449,14 @@ void LoRaRadio::endReception(cMessage *timer)
         }
         receptionTimer = nullptr;
         emit(receptionEndedSignal, check_and_cast<const cObject*>(reception));
+
     }
     else
         EV_INFO << "Reception ended: \x1b[1mignoring\x1b[0m " << (IWirelessSignal*) signal << " " << IRadioSignal::getSignalPartName(part) << " as " << reception << endl;
     updateTransceiverState();
     updateTransceiverPart();
     delete timer;
-    // TODO: move to radio medium
+// TODO: move to radio medium
     check_and_cast<RadioMedium*>(medium.get())->emit(IRadioMedium::signalArrivalEndedSignal, check_and_cast<const cObject*>(reception));
 }
 
@@ -468,7 +478,7 @@ void LoRaRadio::abortReception(cMessage *timer)
 
 void LoRaRadio::captureReception(cMessage *timer)
 {
-    // TODO: this would be called when the receiver switches to a stronger signal while receiving a weaker one
+// TODO: this would be called when the receiver switches to a stronger signal while receiving a weaker one
     throw cRuntimeError("Not yet implemented");
 }
 
@@ -492,7 +502,7 @@ void LoRaRadio::sendUp(Packet *macFrame)
         emit(symbolErrorRateSignal, errorTag->getSymbolErrorRate());
     EV_INFO << "Sending up " << macFrame << endl;
     NarrowbandRadioBase::sendUp(macFrame);
-    //send(macFrame, upperLayerOut);
+//send(macFrame, upperLayerOut);
 }
 
 //double LoRaRadio::getCurrentTxPower()

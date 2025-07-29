@@ -44,6 +44,7 @@ void LoRaTransmitter::initialize(int stage)
 
         LoRaTransmissionCreated = registerSignal("LoRaTransmissionCreated");
         timeOnAir = registerSignal("timeOnAir");
+        sentId = registerSignal("sentId");
 
         if (strcmp(getParentModule()->getClassName(), "rlora::LoRaGWRadio") == 0) {
             iAmGateway = true;
@@ -113,6 +114,7 @@ const ITransmission* LoRaTransmitter::createTransmission(const IRadio *transmitt
     EV << "[MSDebug] I am sending packet with Bytes: " << payloadBytes << endl;
 
     const_cast<LoRaTransmitter*>(this)->emit(timeOnAir, duration);
+    //const_cast<LoRaTransmitter*>(this)->emit(sentId, macFrame->getId());
 
     return new LoRaTransmission(transmitter, macFrame, startTime, endTime, Tpreamble, Theader, Tpayload, startPosition, endPosition, startOrientation, endOrientation, transmissionPower, frame->getCenterFrequency(), frame->getSpreadFactor(), frame->getBandwidth(), frame->getCodeRendundance());
 }

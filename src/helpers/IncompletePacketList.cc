@@ -105,6 +105,7 @@ Result IncompletePacketList::addToIncompletePacket(const BroadcastFragment *pack
             result.isComplete = true;
             result.sendUp = true;
             result.waitTime = waitTime;
+            result.isMission = incompletePacket->retransmit;
             result.completePacket = *incompletePacket;
             return result;
         }

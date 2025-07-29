@@ -119,7 +119,9 @@ bool LoRaReceiver::isPacketCollided(const IReception *reception, IRadioSignal::S
     bool isCollided = false;
     for (auto interferingReception : *interferingReceptions) {
         int id1=reception->getTransmission()->getId();
-        int id2=interferingReception->getTransmission()->getId();
+        int id2 = interferingReception->getTransmission()->getId();
+
+        CollisionLogger::getInstance()->logPossibleCollision(id1, id2);
 
         bool overlap = false;
         bool frequencyCollision = false;

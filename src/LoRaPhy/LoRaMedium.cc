@@ -36,7 +36,8 @@ namespace rlora {
 
 Define_Module(LoRaMedium);
 
-LoRaMedium::LoRaMedium() : RadioMedium()
+LoRaMedium::LoRaMedium() :
+        RadioMedium()
 {
 }
 
@@ -44,7 +45,8 @@ LoRaMedium::~LoRaMedium()
 {
 }
 
-void LoRaMedium::finish(){
+void LoRaMedium::finish()
+{
     double receptionCacheHitPercentage = 100 * (double) cacheReceptionHitCount / (double) cacheReceptionGetCount;
     double interferenceCacheHitPercentage = 100 * (double) cacheInterferenceHitCount / (double) cacheInterferenceGetCount;
     double noiseCacheHitPercentage = 100 * (double) cacheNoiseHitCount / (double) cacheNoiseGetCount;
@@ -83,15 +85,15 @@ void LoRaMedium::finish(){
 bool LoRaMedium::matchesMacAddressFilter(const IRadio *radio, const Packet *packet) const
 {
     const auto &chunk = packet->peekAtFront<Chunk>();
-    const auto & loraHeader = dynamicPtrCast<const LoRaMacFrame>(chunk);
+    const auto &loraHeader = dynamicPtrCast<const LoRaMacFrame>(chunk);
     if (loraHeader == nullptr)
         return false;
     MacAddress address = MacAddress(loraHeader->getReceiverAddress().getInt());
     if (address.isBroadcast() || address.isMulticast())
         return true;
 
-    cModule *host = getContainingNode(check_and_cast<const cModule *>(radio));
-    IInterfaceTable *interfaceTable = check_and_cast<IInterfaceTable *>(host->getSubmodule("interfaceTable"));
+    cModule *host = getContainingNode(check_and_cast<const cModule*>(radio));
+    IInterfaceTable *interfaceTable = check_and_cast<IInterfaceTable*>(host->getSubmodule("interfaceTable"));
     for (int i = 0; i < interfaceTable->getNumInterfaces(); i++) {
         auto interface = interfaceTable->getInterface(i);
         if (interface && interface->getMacAddress() == address)
@@ -100,8 +102,7 @@ bool LoRaMedium::matchesMacAddressFilter(const IRadio *radio, const Packet *pack
     return false;
 }
 
-
-const IReceptionResult *LoRaMedium::getReceptionResult(const IRadio *radio, const IListening *listening, const ITransmission *transmission) const
+const IReceptionResult* LoRaMedium::getReceptionResult(const IRadio *radio, const IListening *listening, const ITransmission *transmission) const
 {
     cacheResultGetCount++;
     const IReceptionResult *result = communicationCache->getCachedReceptionResult(radio, transmission);
@@ -110,7 +111,7 @@ const IReceptionResult *LoRaMedium::getReceptionResult(const IRadio *radio, cons
     else {
         result = computeReceptionResult(radio, listening, transmission);
 
-        auto pkt = const_cast<Packet *>(result->getPacket());
+        auto pkt = const_cast<Packet*>(result->getPacket());
         if (!pkt->findTag<SnirInd>()) {
             const ISnir *snir = getSNIR(radio, transmission);
             auto snirInd = pkt->addTagIfAbsent<SnirInd>();
@@ -118,7 +119,7 @@ const IReceptionResult *LoRaMedium::getReceptionResult(const IRadio *radio, cons
             snirInd->setMaximumSnir(snir->getMax());
         }
         if (!pkt->findTag<ErrorRateInd>()) {
-            auto errorModel = dynamic_cast<IErrorModel *>(getSubmodule("errorModel"));
+            auto errorModel = dynamic_cast<IErrorModel*>(getSubmodule("errorModel"));
             const ISnir *snir = getSNIR(radio, transmission);
             auto errorRateInd = pkt->addTagIfAbsent<ErrorRateInd>(); // TODO: should be done  setPacketErrorRate(packetModel->getPER());
             errorRateInd->setPacketErrorRate(errorModel ? errorModel->computePacketErrorRate(snir, IRadioSignal::SIGNAL_PART_WHOLE) : 0.0);
@@ -138,7 +139,7 @@ void LoRaMedium::addTransmission(const IRadio *transmitterRadio, const ITransmis
     transmissionCount++;
     communicationCache->addTransmission(transmission);
     simtime_t maxArrivalEndTime = transmission->getEndTime();
-    communicationCache->mapRadios([&] (const IRadio *receiverRadio) {
+    communicationCache->mapRadios([&](const IRadio *receiverRadio) {
         if (receiverRadio != nullptr && receiverRadio != transmitterRadio && receiverRadio->getReceiver() != nullptr) {
             const IArrival *arrival = propagation->computeArrival(transmission, receiverRadio->getAntenna()->getMobility());
             const IntervalTree::Interval *interval = new IntervalTree::Interval(arrival->getStartTime(), arrival->getEndTime(), (void *)transmission);
@@ -146,7 +147,7 @@ void LoRaMedium::addTransmission(const IRadio *transmitterRadio, const ITransmis
             LoRaBandListening *loraListening = new LoRaBandListening(receiverRadio, arrival->getStartTime(), arrival->getEndTime(), arrival->getStartPosition(), arrival->getEndPosition(), loRaTransmission->getLoRaCF(), loRaTransmission->getLoRaBW(), loRaTransmission->getLoRaSF());
             const simtime_t arrivalEndTime = arrival->getEndTime();
             if (arrivalEndTime > maxArrivalEndTime)
-                maxArrivalEndTime = arrivalEndTime;
+            maxArrivalEndTime = arrivalEndTime;
             communicationCache->setCachedArrival(receiverRadio, transmission, arrival);
             communicationCache->setCachedInterval(receiverRadio, transmission, interval);
             communicationCache->setCachedListening(receiverRadio, transmission, loraListening);
@@ -155,7 +156,7 @@ void LoRaMedium::addTransmission(const IRadio *transmitterRadio, const ITransmis
     communicationCache->setCachedInterferenceEndTime(transmission, maxArrivalEndTime + mediumLimitCache->getMaxTransmissionDuration());
     if (!removeNonInterferingTransmissionsTimer->isScheduled())
         scheduleAt(communicationCache->getCachedInterferenceEndTime(transmission), removeNonInterferingTransmissionsTimer);
-    emit(signalAddedSignal, check_and_cast<const cObject *>(transmission));
+    emit(signalAddedSignal, check_and_cast<const cObject*>(transmission));
 }
 
 }

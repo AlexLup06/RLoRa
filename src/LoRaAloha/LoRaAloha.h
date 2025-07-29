@@ -69,8 +69,12 @@ protected:
     simsignal_t throughputSignal;
     simsignal_t effectiveThroughputSignal;
     simsignal_t timeInQueue;
+    simsignal_t sentMissionId;
+    simsignal_t receivedMissionId;
+
 
     map<int, SimTime> idToAddedTimeMap;
+    unordered_set<int> missionIds;
 
     cMessage *mediumStateChange = nullptr;
     cMessage *droppedPacket = nullptr;

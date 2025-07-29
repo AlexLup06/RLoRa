@@ -13,6 +13,8 @@ module LoRaMeshRouter extends MacProtocolBase like IMacProtocol
         @statistic[timeInQueue](source=timeInQueue; record=vector; interpolationmode=none);
         @statistic[throughputBps](source=throughputBps; record=vector; interpolationmode=none; unit=Bps);
         @statistic[effectiveThroughputBps](source=effectiveThroughputBps; record=vector; interpolationmode=none; unit=Bps);
+        @statistic[sentMissionId](source=sentMissionId; record=vector; interpolationmode=none; unit=Bps);
+        @statistic[receivedMissionId](source=receivedMissionId; record=vector; interpolationmode=none; unit=Bps);
 
         @class(LoRaMeshRouter);
 }

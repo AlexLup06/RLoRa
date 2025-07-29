@@ -11,22 +11,25 @@
 #include <string>
 #include <set>
 
-
 namespace rlora {
 
 using namespace std;
 
-class CollisionLogger {
-  private:
-    static CollisionLogger* instance;
+class CollisionLogger
+{
+private:
+    static CollisionLogger *instance;
 
     // Kollisionen als Strings im Format "id1,id2"
     set<string> collisionSet;
+    set<string> possibleCollisionSet;
 
     // Konstruktor privat (Singleton)
-    CollisionLogger() {}
+    CollisionLogger()
+    {
+    }
 
-  public:
+public:
     // Kein Kopieren erlaubt
     CollisionLogger(const CollisionLogger&) = delete;
     CollisionLogger& operator=(const CollisionLogger&) = delete;
@@ -36,9 +39,10 @@ class CollisionLogger {
 
     // Neue Kollision eintragen
     void logCollision(int id1, int id2);
+    void logPossibleCollision(int id1, int id2);
 
     // Am Ende schreiben
-    void writeToFile(const std::string& filename = "collisions.txt");
+    void writeToFile(const std::string &filename = "collisions.txt");
 };
 
 } /* namespace rlora */
