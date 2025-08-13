@@ -11,7 +11,7 @@ cleanall: checkmakefiles
 	rm -f src/Makefile
 
 makefiles:
-	@cd src && opp_makemake --make-so -o rlora -O out -f --deep -KINET_PROJ=$(INET_DIR) -DINET_IMPORT -I. -I$$\(INET_PROJ\)/src -L$$\(INET_PROJ\)/src -lINET$$\(D\)
+	@cd src && opp_makemake -o rlora -O out -f --deep -KINET_PROJ=$(INET_DIR) -DINET_IMPORT -I. -I$$\(INET_PROJ\)/src -L$$\(INET_PROJ\)/src -lINET$$\(D\)
 
 checkmakefiles:
 	@if [ ! -f src/Makefile ]; then \
