@@ -30,6 +30,7 @@ class BroadcastHeader extends inet::FieldsChunk {
     int source;
     int hop;
     int messageId;
+    int missionId;
     int size;
     bool retransmit;
 }

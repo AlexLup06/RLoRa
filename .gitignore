@@ -6,3 +6,4 @@ scripts/venv
 *_m.cc
 data/**/*.txt
 data/**/*.json
+Makefile

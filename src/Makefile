@@ -58,6 +58,7 @@ OBJS = \
     $O/helpers/generalHelpers.o \
     $O/helpers/IncompletePacketList.o \
     $O/helpers/LatestMessageIdMap.o \
+    $O/helpers/LatestMissionIdFromSourceMap.o \
     $O/LoRa/LoRaMacFrame_m.o \
     $O/LoRa/LoRaTagInfo_m.o \
     $O/LoRaApp/LoRaRobotPacket_m.o \

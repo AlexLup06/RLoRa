@@ -24,7 +24,7 @@ for file in $SOURCE_DIR*.vec; do
  
 	opp_scavetool export -f 'name=~"timeInQueue:vector"' -o $rlora_root/data/${protocol}/${range}/timeInQueue-${count}.json -F JSON ${SOURCE_DIR}mac${protocol}-maxX${range}-ttnm${interval}-numberNodes${nodes}-m${mobility}-rep${rep}.vec
         
-	opp_scavetool export -f 'name=~"sentmissionid:vector" AND name=~"receivedMissionId:vector"' -o $rlora_root/data/${protocol}/${range}/missionId-${count}.json -F JSON ${SOURCE_DIR}mac${protocol}-maxX${range}-ttnm${interval}-numberNodes${nodes}-m${mobility}-rep${rep}.vec
+	opp_scavetool export -f 'name=~"sentMissionId:vector" AND name=~"receivedMissionId:vector"' -o $rlora_root/data/${protocol}/${range}/missionId-${count}.json -F JSON ${SOURCE_DIR}mac${protocol}-maxX${range}-ttnm${interval}-numberNodes${nodes}-m${mobility}-rep${rep}.vec
 
 	opp_scavetool export -f 'name=~"bytesReceived:vector"' -o $rlora_root/data/${protocol}/${range}/bytesReceived-${count}.json -F JSON ${SOURCE_DIR}mac${protocol}-maxX${range}-ttnm${interval}-numberNodes${nodes}-m${mobility}-rep${rep}.vec
         

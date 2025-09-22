@@ -25,4 +25,5 @@ class BroadcastFragment extends inet::FieldsChunk {
     int fragment;
     int source;
 	int payloadSize;
+	int missionId;
 }

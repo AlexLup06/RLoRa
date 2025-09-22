@@ -23,6 +23,7 @@
 #include "../helpers/CustomPacketQueue.h"
 #include "../helpers/IncompletePacketList.h"
 #include "../helpers/LatestMessageIdMap.h"
+#include "../helpers/LatestMissionIdFromSourceMap.h"
 
 namespace rlora {
 
@@ -49,6 +50,7 @@ protected:
     int cwMax = -1;
     int cwMulticast = -1;
     //@}
+    LatestMissionIdFromSourceMap latestMissionIdFromSourceMap;
 
     IRadio *radio = nullptr;
     LoRaRadio *loRaRadio;
@@ -72,7 +74,6 @@ protected:
     simsignal_t receivedMissionId;
 
     map<int, SimTime> idToAddedTimeMap;
-    unordered_set<int> missionIds;
     /**
      * @name LoRaCSMA state variables
      * Various state information checked and modified according to the state machine.
@@ -97,7 +98,6 @@ protected:
 
     /** @name Timer messages */
     //@{
-
     /** End of the backoff period */
     cMessage *endBackoff = nullptr;
 
@@ -128,7 +128,7 @@ public:
     virtual ~LoRaCSMA();
 
     virtual MacAddress getAddress();
-    void createBroadcastPacket(int packetSize, int messageId, int hopId, int source, bool retransmit);
+    void createBroadcastPacket(int packetSize, int missionId, int hopId, int source, bool retransmit);
     void announceNodeId(int respond);
     void handlePacket(Packet *packet);
     void retransmitPacket(FragmentedPacket fragmentedPacket);
@@ -167,7 +167,6 @@ protected:
      * @brief These functions have the side effect of starting the corresponding timers.
      */
     //@{
-
     virtual void invalidateBackoffPeriod();
     virtual bool isInvalidBackoffPeriod();
     virtual void generateBackoffPeriod();

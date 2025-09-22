@@ -368,7 +368,6 @@ void LoRaMeshRouter::handlePacket(Packet *packet)
         int size = msg->getSize();
         int waitTime = 20 + predictSendTime(size);
         senderWaitDelay(waitTime);
-
     }
     else if (auto msg = dynamic_cast<const BroadcastFragment*>(chunk.get())) {
         EV << "Received BroadcastFragment" << endl;

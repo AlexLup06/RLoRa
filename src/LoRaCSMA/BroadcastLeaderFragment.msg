@@ -32,5 +32,6 @@ class BroadcastLeaderFragment extends inet::FieldsChunk {
     int messageId;
     int size;
     int payloadSize;
+    int missionId;
     bool retransmit;
 }

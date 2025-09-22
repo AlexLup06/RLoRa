@@ -34,6 +34,7 @@ struct FragmentedPacket
 {
     string id = generate_uuid();
     int messageId = -1;
+    int missionId = -1;
     int size = -1;
     int received = 0;
     int lastFragment = 0;

@@ -26,4 +26,5 @@ class MessageTypeTag extends inet::TagBase
 {
     bool isNeighbourMsg;
     bool isHeader;
+    int missionId;
 }

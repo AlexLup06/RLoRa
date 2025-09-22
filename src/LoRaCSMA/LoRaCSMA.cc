@@ -496,9 +496,9 @@ void LoRaCSMA::sendDataFrame()
         emit(timeInQueue, delta);
     }
 
-    if (missionIds.count(frameToSend->getId())) {
-        emit(sentMissionId, frameToSend->getId());
-        missionIds.erase(frameToSend->getId());
+    auto typeTag = frameToSend->getTag<MessageTypeTag>();
+    if (!typeTag->isNeighbourMsg()) {
+        emit(sentMissionId, typeTag->getMissionId());
     }
 
     frameToSend = nullptr;
@@ -585,14 +585,16 @@ MacAddress LoRaCSMA::getAddress()
     return address;
 }
 
-void LoRaCSMA::createBroadcastPacket(int packetSize, int messageId, int hopId, int source, bool retransmit)
+void LoRaCSMA::createBroadcastPacket(int packetSize, int missionId, int hopId, int source, bool retransmit)
 {
     auto headerPaket = new Packet("BroadcastLeaderFragment");
     auto headerPayload = makeShared<BroadcastLeaderFragment>();
+    int messageId = headerPaket->getId();
 
-    if (messageId == -1) {
-        messageId = headerPaket->getId();
+    if (missionId == -1) {
+        missionId = headerPaket->getId();
     }
+
     if (hopId == -1) {
         hopId = nodeId;
     }
@@ -610,14 +612,18 @@ void LoRaCSMA::createBroadcastPacket(int packetSize, int messageId, int hopId, i
         headerPayload->setPayloadSize(packetSize);
         packetSize = 0;
     }
+
     headerPayload->setMessageId(messageId);
+    headerPayload->setMissionId(missionId);
     headerPayload->setSource(source);
     headerPayload->setHop(hopId);
     headerPayload->setRetransmit(retransmit);
     headerPaket->insertAtBack(headerPayload);
     headerPaket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
+
     auto messageTypeTag = headerPaket->addTagIfAbsent<MessageTypeTag>();
     messageTypeTag->setIsNeighbourMsg(!retransmit);
+    messageTypeTag->setMissionId(missionId);
     messageTypeTag->setIsHeader(true);
 
     encapsulate(headerPaket);
@@ -625,9 +631,6 @@ void LoRaCSMA::createBroadcastPacket(int packetSize, int messageId, int hopId, i
     bool trackQueueTime = packetQueue.enqueuePacket(headerPaket);
     if (trackQueueTime) {
         idToAddedTimeMap[headerPaket->getId()] = simTime();
-    }
-    if (retransmit){
-        missionIds.insert(messageId);
     }
 
     // INFO: das nullte packet ist das was im leader direkt mitgeschickt wird
@@ -648,12 +651,15 @@ void LoRaCSMA::createBroadcastPacket(int packetSize, int messageId, int hopId, i
         }
 
         fragmentPayload->setMessageId(messageId);
+        fragmentPayload->setMissionId(missionId);
         fragmentPayload->setSource(source);
         fragmentPayload->setFragment(i++);
         fragmentPacket->insertAtBack(fragmentPayload);
         fragmentPacket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
+
         auto messageTypeTag = fragmentPacket->addTagIfAbsent<MessageTypeTag>();
         messageTypeTag->setIsNeighbourMsg(!retransmit);
+        messageTypeTag->setMissionId(missionId);
         messageTypeTag->setIsHeader(false);
 
         encapsulate(fragmentPacket);
@@ -699,6 +705,15 @@ void LoRaCSMA::handlePacket(Packet *packet)
         EV << "Received BroadcastLeaderFragment" << endl;
         int messageId = msg->getMessageId();
         int source = msg->getSource();
+        int missionId = msg->getMissionId();
+        bool isMissionMsg = msg->getRetransmit();
+
+        if (source == nodeId) {
+            // wir haben ein Paket erhalten, das wir losgesendet haben
+            delete packet;
+            return;
+        }
+
         if (incompletePacketList.getById(messageId) != nullptr) {
             // Paket schon erhalten. Vorbeugen von Duplikaten. Sollte nicht passieren eigentlich
             delete packet;
@@ -711,8 +726,15 @@ void LoRaCSMA::handlePacket(Packet *packet)
             return;
         }
 
+        if (!latestMissionIdFromSourceMap.isNewMissionIdLarger(source, missionId)) {
+            // Mission schon erhalten
+            delete packet;
+            return;
+        }
+
         FragmentedPacket incompletePacket;
         incompletePacket.messageId = messageId;
+        incompletePacket.missionId = missionId;
         incompletePacket.sourceNode = source;
         incompletePacket.size = msg->getSize();
         incompletePacket.lastHop = msg->getHop();
@@ -724,11 +746,16 @@ void LoRaCSMA::handlePacket(Packet *packet)
         incompletePacketList.add(incompletePacket);
         latestMessageIdMap.updateMessageId(source, messageId);
 
+        if (isMissionMsg) {
+            latestMissionIdFromSourceMap.updateMissionId(source, missionId);
+        }
+
         // wir senden schon mit dem ersten packet daten
         BroadcastFragment *fragmentPayload = new BroadcastFragment();
         fragmentPayload->setChunkLength(msg->getChunkLength());
         fragmentPayload->setPayloadSize(msg->getPayloadSize());
         fragmentPayload->setMessageId(messageId);
+        fragmentPayload->setMissionId(missionId);
         fragmentPayload->setSource(source);
         fragmentPayload->setFragment(0);
 
@@ -772,8 +799,8 @@ void LoRaCSMA::retransmitPacket(FragmentedPacket fragmentedPacket)
     if (!fragmentedPacket.retransmit || fragmentedPacket.sourceNode == nodeId) {
         return;
     }
-    emit(receivedMissionId, fragmentedPacket.messageId);
-    createBroadcastPacket(fragmentedPacket.size, fragmentedPacket.messageId, nodeId, fragmentedPacket.sourceNode, fragmentedPacket.retransmit);
+    emit(receivedMissionId, fragmentedPacket.missionId);
+    createBroadcastPacket(fragmentedPacket.size, fragmentedPacket.missionId, nodeId, fragmentedPacket.sourceNode, fragmentedPacket.retransmit);
 }
 
 void LoRaCSMA::turnOnReceiver()
@@ -784,3 +811,11 @@ void LoRaCSMA::turnOnReceiver()
 }
 
 } /* namespace rlora */
+
+/*
+ *
+ * A sendM1FA                   gotM1FAPB
+ * B          gotM1FA sendM1FA
+ * C                            gotM1FAPB sendM1FA
+ *
+ * */
