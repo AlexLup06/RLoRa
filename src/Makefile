@@ -2,7 +2,7 @@
 # OMNeT++/OMNEST Makefile for rlora
 #
 # This file was generated with the command:
-#  opp_makemake -f --deep -KINET_4_4_0_PROJ=../../inet-4.4.0 -KFLORA_1_1_0_PROJ=../../flora-1.1.0 -KRLORA_PROJ=.. -DINET_IMPORT -I$$\(INET_4_4_0_PROJ\)/src -I$$\(FLORA_1_1_0_PROJ\)/src -L$$\(INET_4_4_0_PROJ\)/src -L$$\(FLORA_1_1_0_PROJ\)/src -lINET$$\(D\) -lflora$$\(D\)
+#  opp_makemake -o rlora -O out -f --deep -KINET_PROJ=/nobackup/lupatisy/inet4.4 -DINET_IMPORT -I. -I$(INET_PROJ)/src -L$(INET_PROJ)/src -lINET$(D)
 #
 
 # Name of target to be created (-o option)
@@ -19,13 +19,13 @@ USERIF_LIBS = $(ALL_ENV_LIBS) # that is, $(QTENV_LIBS) $(CMDENV_LIBS)
 #USERIF_LIBS = $(QTENV_LIBS)
 
 # C++ include paths (with -I)
-INCLUDE_PATH = -I$(INET_4_4_0_PROJ)/src -I$(FLORA_1_1_0_PROJ)/src
+INCLUDE_PATH = -I. -I$(INET_PROJ)/src
 
 # Additional object and library files to link with
 EXTRA_OBJS =
 
 # Additional libraries (-L, -l options)
-LIBS = $(LDFLAG_LIBPATH)$(INET_4_4_0_PROJ)/src $(LDFLAG_LIBPATH)$(FLORA_1_1_0_PROJ)/src  -lINET$(D) -lflora$(D)
+LIBS = $(LDFLAG_LIBPATH)$(INET_PROJ)/src  -lINET$(D)
 
 # Output directory
 PROJECT_OUTPUT_DIR = ../out
@@ -34,6 +34,11 @@ O = $(PROJECT_OUTPUT_DIR)/$(CONFIGNAME)/$(PROJECTRELATIVE_PATH)
 
 # Object files for local .cc, .msg and .sm files
 OBJS = \
+    $O/helpers/CollisionLogger.o \
+    $O/helpers/CustomPacketQueue.o \
+    $O/helpers/generalHelpers.o \
+    $O/helpers/IncompletePacketList.o \
+    $O/helpers/LatestMessageIdMap.o \
     $O/LoRa/LoRaRadio.o \
     $O/LoRaAloha/LoRaAloha.o \
     $O/LoRaApp/LoRaApp.o \
@@ -53,12 +58,16 @@ OBJS = \
     $O/LoRaPhy/LoRaReception.o \
     $O/LoRaPhy/LoRaTransmission.o \
     $O/LoRaPhy/LoRaTransmitter.o \
+<<<<<<< HEAD
     $O/helpers/CollisionLogger.o \
     $O/helpers/CustomPacketQueue.o \
     $O/helpers/generalHelpers.o \
     $O/helpers/IncompletePacketList.o \
     $O/helpers/LatestMessageIdMap.o \
     $O/helpers/LatestMissionIdFromSourceMap.o \
+=======
+    $O/helpers/MessageTypeTag_m.o \
+>>>>>>> refs/remotes/origin/main
     $O/LoRa/LoRaMacFrame_m.o \
     $O/LoRa/LoRaTagInfo_m.o \
     $O/LoRaApp/LoRaRobotPacket_m.o \
@@ -69,11 +78,11 @@ OBJS = \
     $O/LoRaMeshRouter/NodeAnnounce_m.o \
     $O/LoRaMeshRouter/WaitTimeTag_m.o \
     $O/LoRaPhy/LoRaPhyPreamble_m.o \
-    $O/LoRaPhy/LoRaRadioControlInfo_m.o \
-    $O/helpers/MessageTypeTag_m.o
+    $O/LoRaPhy/LoRaRadioControlInfo_m.o
 
 # Message files
 MSGFILES = \
+    helpers/MessageTypeTag.msg \
     LoRa/LoRaMacFrame.msg \
     LoRa/LoRaTagInfo.msg \
     LoRaApp/LoRaRobotPacket.msg \
@@ -84,16 +93,13 @@ MSGFILES = \
     LoRaMeshRouter/NodeAnnounce.msg \
     LoRaMeshRouter/WaitTimeTag.msg \
     LoRaPhy/LoRaPhyPreamble.msg \
-    LoRaPhy/LoRaRadioControlInfo.msg \
-    helpers/MessageTypeTag.msg
+    LoRaPhy/LoRaRadioControlInfo.msg
 
 # SM files
 SMFILES =
 
 # Other makefile variables (-K)
-INET_4_4_0_PROJ=../../inet-4.4.0
-FLORA_1_1_0_PROJ=../../flora-1.1.0
-RLORA_PROJ=..
+INET_PROJ=/nobackup/lupatisy/inet4.4
 
 #------------------------------------------------------------------------------
 
@@ -114,7 +120,7 @@ include $(CONFIGFILE)
 # Simulation kernel and user interface libraries
 OMNETPP_LIBS = $(OPPMAIN_LIB) $(USERIF_LIBS) $(KERNEL_LIBS) $(SYS_LIBS)
 ifneq ($(PLATFORM),win32)
-LIBS += -Wl,-rpath,$(abspath $(INET_4_4_0_PROJ)/src) -Wl,-rpath,$(abspath $(FLORA_1_1_0_PROJ)/src)
+LIBS += -Wl,-rpath,$(abspath $(INET_PROJ)/src)
 endif
 
 COPTS = $(CFLAGS) $(IMPORT_DEFINES) -DINET_IMPORT $(INCLUDE_PATH) -I$(OMNETPP_INCL_DIR)
@@ -132,8 +138,6 @@ endif
 
 #------------------------------------------------------------------------------
 # User-supplied makefile fragment(s)
--include makefrag
-
 #------------------------------------------------------------------------------
 
 # Main target
