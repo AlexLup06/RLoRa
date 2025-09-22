@@ -7,3 +7,4 @@ scripts/venv
 data/**/*.txt
 data/**/*.json
 Makefile
+src/Makefile
