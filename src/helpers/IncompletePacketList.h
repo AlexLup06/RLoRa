@@ -22,7 +22,7 @@
 
 #include "inet/common/Units.h"
 
-#include "../LoRaMeshRouter/BroadcastFragment_m.h"
+#include "../messages/BroadcastFragment_m.h"
 #include "generalHelpers.h"
 
 namespace rlora {
@@ -57,6 +57,7 @@ struct Result
     bool isComplete;
     bool sendUp;
     bool isMission = false;
+    bool isRelevant = true;
     int waitTime;
     FragmentedPacket completePacket = FragmentedPacket();
 };
@@ -73,6 +74,7 @@ public:
     void add(const FragmentedPacket &packet);
     void removeBySource(int source);
     Result addToIncompletePacket(const BroadcastFragment *fragment);
+    bool isFromSameHop(int messageId);
 
 private:
     std::vector<FragmentedPacket> packets_;

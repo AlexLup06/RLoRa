@@ -14,11 +14,21 @@
 // 
 
 import inet.common.packet.chunk.Chunk; 
+import inet.common.Units;
+
+
+cplusplus {{
+using namespace inet;
+}}
 
 namespace rlora;
 
 //
 // TODO generated message class
 //
-class BroadcastAck extends inet::FieldsChunk {
+class BroadcastContinuousHeader extends inet::FieldsChunk {
+    int messageId;
+    int size;
+    int hopId;
 }
+

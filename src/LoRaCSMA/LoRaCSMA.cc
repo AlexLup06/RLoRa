@@ -20,11 +20,11 @@
 #include "../LoRa/LoRaTagInfo_m.h"
 #include "../LoRaApp/LoRaRobotPacket_m.h"
 #include "../helpers/generalHelpers.h"
-#include "../helpers/MessageTypeTag_m.h"
+#include "../helpers/MessageInfoTag_m.h"
 
-#include "./BroadcastLeaderFragment_m.h"
-#include "../LoRaMeshRouter/BroadcastFragment_m.h"
-#include "../LoRaMeshRouter/NodeAnnounce_m.h"
+#include "../messages/BroadcastLeaderFragment_m.h"
+#include "../messages/BroadcastFragment_m.h"
+#include "../messages/NodeAnnounce_m.h"
 
 namespace rlora {
 
@@ -234,8 +234,12 @@ void LoRaCSMA::handleSelfMessage(cMessage *msg)
 void LoRaCSMA::handleUpperPacket(Packet *packet)
 {
     const auto &payload = packet->peekAtFront<LoRaRobotPacket>();
-    bool retransmit = payload->isMission();
-    createBroadcastPacket(packet->getByteLength(), -1, -1, -1, retransmit);
+    bool isMission = payload->isMission();
+    int missionId = -2;
+    if (isMission){
+        missionId=-1;
+    }
+    createBroadcastPacket(packet->getByteLength(), missionId, -1, -1, isMission);
 
     if (currentTxFrame == nullptr) {
         Packet *packetToSend = packetQueue.dequeuePacket();
@@ -304,6 +308,7 @@ void LoRaCSMA::handleWithFsm(cMessage *msg)
                 RECEIVE,
         );
     }
+    // TODO: check backoff contention window and DIFS
     FSMA_State(BACKOFF)
     {
         FSMA_Enter(scheduleBackoffTimer());
@@ -496,7 +501,7 @@ void LoRaCSMA::sendDataFrame()
         emit(timeInQueue, delta);
     }
 
-    auto typeTag = frameToSend->getTag<MessageTypeTag>();
+    auto typeTag = frameToSend->getTag<MessageInfoTag>();
     if (!typeTag->isNeighbourMsg()) {
         emit(sentMissionId, typeTag->getMissionId());
     }
@@ -594,7 +599,6 @@ void LoRaCSMA::createBroadcastPacket(int packetSize, int missionId, int hopId, i
     if (missionId == -1) {
         missionId = headerPaket->getId();
     }
-
     if (hopId == -1) {
         hopId = nodeId;
     }
@@ -621,10 +625,11 @@ void LoRaCSMA::createBroadcastPacket(int packetSize, int missionId, int hopId, i
     headerPaket->insertAtBack(headerPayload);
     headerPaket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
 
-    auto messageTypeTag = headerPaket->addTagIfAbsent<MessageTypeTag>();
-    messageTypeTag->setIsNeighbourMsg(!retransmit);
-    messageTypeTag->setMissionId(missionId);
-    messageTypeTag->setIsHeader(true);
+    auto messageInfoTag = headerPaket->addTagIfAbsent<MessageInfoTag>();
+    messageInfoTag->setIsNeighbourMsg(!retransmit);
+    messageInfoTag->setMissionId(missionId);
+    messageInfoTag->setIsHeader(true);
+    messageInfoTag->setHasUsefulData(true);
 
     encapsulate(headerPaket);
 
@@ -657,10 +662,11 @@ void LoRaCSMA::createBroadcastPacket(int packetSize, int missionId, int hopId, i
         fragmentPacket->insertAtBack(fragmentPayload);
         fragmentPacket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
 
-        auto messageTypeTag = fragmentPacket->addTagIfAbsent<MessageTypeTag>();
-        messageTypeTag->setIsNeighbourMsg(!retransmit);
-        messageTypeTag->setMissionId(missionId);
-        messageTypeTag->setIsHeader(false);
+        auto messageInfoTag = fragmentPacket->addTagIfAbsent<MessageInfoTag>();
+        messageInfoTag->setIsNeighbourMsg(!retransmit);
+        messageInfoTag->setMissionId(missionId);
+        messageInfoTag->setIsHeader(false);
+        messageInfoTag->setHasUsefulData(true);
 
         encapsulate(fragmentPacket);
         packetQueue.enqueuePacket(fragmentPacket);
@@ -681,9 +687,9 @@ void LoRaCSMA::announceNodeId(int respond)
 
     nodeAnnouncePacket->insertAtBack(nodeAnnouncePayload);
     nodeAnnouncePacket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
-    nodeAnnouncePacket->addTagIfAbsent<MessageTypeTag>()->setIsNeighbourMsg(false);
+    nodeAnnouncePacket->addTagIfAbsent<MessageInfoTag>()->setIsNeighbourMsg(false);
     encapsulate(nodeAnnouncePacket);
-    packetQueue.enqueuePacketAtPosition(nodeAnnouncePacket, 0);
+    packetQueue.enqueueNodeAnnounce(nodeAnnouncePacket);
 }
 
 void LoRaCSMA::handlePacket(Packet *packet)

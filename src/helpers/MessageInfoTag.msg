@@ -22,9 +22,16 @@ using namespace inet;
 
 namespace rlora;
 
-class MessageTypeTag extends inet::TagBase
+class MessageInfoTag extends inet::TagBase
 {
     bool isNeighbourMsg;
     bool isHeader;
-    int missionId;
+    bool hasRegularHeader=true;
+    bool isNodeAnnounce=false;
+    bool hasUsefulData=false;
+    bool withRTS=true;
+    int missionId=-1;
+    int hopId=-1;
+    int payloadSize=-1;
+    int tries=0;
 }

@@ -30,7 +30,7 @@
 #include "inet/physicallayer/wireless/common/contract/packetlevel/SignalTag_m.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IErrorModel.h"
 
-#include "../helpers/CollisionLogger.h"
+#include "../helpers/DataLogger.h"
 
 namespace rlora {
 
@@ -79,7 +79,7 @@ void LoRaMedium::finish()
     recordScalar("reception result cache hit", resultCacheHitPercentage, "%");
 
     string pathToCollisions = par("pathToCollisions");
-    CollisionLogger::getInstance()->writeToFile(pathToCollisions);
+    DataLogger::getInstance()->writeDataToFile(pathToCollisions);
 }
 
 bool LoRaMedium::matchesMacAddressFilter(const IRadio *radio, const Packet *packet) const

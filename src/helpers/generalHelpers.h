@@ -31,9 +31,18 @@ using namespace std;
 int predictSendTime(int size);
 string generate_uuid();
 
-#define BROADCAST_HEADER_SIZE 8
+template<typename T>
+inline void safeDelete(T *&ptr)
+{
+    delete ptr;
+    ptr = nullptr;
+}
+
 #define NODE_ANNOUNCE_SIZE 12
+#define BROADCAST_CTS 4
+#define BROADCAST_HEADER_SIZE 8
 #define BROADCAST_FRAGMENT_META_SIZE 4
+#define BROADCAST_CONTINIOUS_HEADER 4
 #define BROADCAST_LEADER_FRAGMENT_META_SIZE 8
 
 } // namespace rlora

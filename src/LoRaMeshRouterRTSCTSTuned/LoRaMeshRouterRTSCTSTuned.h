@@ -13,8 +13,8 @@
 // along with this program.  If not, see http://www.gnu.org/licenses/.
 // 
 
-#ifndef LORAALOHA_LORAALOHA_H_
-#define LORAALOHA_LORAALOHA_H_
+#ifndef LORAMESHROUTERRTSCTSTUNED_LORAMESHROUTERRTSCTSTUNED_H_
+#define LORAMESHROUTERRTSCTSTUNED_LORAMESHROUTERRTSCTSTUNED_H_
 
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IRadio.h"
 #include "inet/linklayer/contract/IMacProtocol.h"
@@ -44,7 +44,7 @@ namespace rlora {
  * Based on CSMA class
  */
 
-class LoRaAloha : public MacProtocolBase, public IMacProtocol, public queueing::IActivePacketSink
+class LoRaMeshRouterRTSCTSTuned : public MacProtocolBase, public IMacProtocol, public queueing::IActivePacketSink
 {
 
 protected:
@@ -97,7 +97,7 @@ public:
      * @name Construction functions
      */
     //@{
-    virtual ~LoRaAloha();
+    virtual ~LoRaMeshRouterRTSCTSTuned();
     //@}
     virtual MacAddress getAddress();
     virtual queueing::IPassivePacketSource* getProvider(cGate *gate) override;
@@ -168,4 +168,4 @@ protected:
 
 } // namespace inet
 
-#endif // ifndef __LoRaAloha_H
+#endif /* LORAMESHROUTERRTSCTSTUNED_LORAMESHROUTERRTSCTSTUNED_H_ */

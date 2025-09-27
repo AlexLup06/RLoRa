@@ -13,31 +13,14 @@
 // along with this program.  If not, see http://www.gnu.org/licenses/.
 // 
 
-#include "generalHelpers.h"
+import inet.common.packet.chunk.Chunk; 
 
-namespace rlora {
+namespace rlora;
 
-int predictSendTime(int size)
-{
-    if (size > 255) {
-        return 255 + 20;
-    }
-    return size + 20;
+//
+// TODO generated message class
+//
+class BroadcastCTS extends inet::FieldsChunk {
+    int size;
+    int hopId;
 }
-
-string generate_uuid()
-{
-    random_device rd;
-    mt19937 gen(rd());
-    uniform_int_distribution<> dis(0, 15);
-
-    stringstream ss;
-    for (int i = 0; i < 32; ++i) {
-        if (i == 8 || i == 12 || i == 16 || i == 20)
-            ss << "-";
-        ss << hex << dis(gen);
-    }
-    return ss.str();
-}
-
-} /* namespace rlora */

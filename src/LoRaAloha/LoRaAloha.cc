@@ -27,11 +27,11 @@
 #include "../LoRa/LoRaTagInfo_m.h"
 #include "../LoRaApp/LoRaRobotPacket_m.h"
 #include "../helpers/generalHelpers.h"
-#include "../helpers/MessageTypeTag_m.h"
+#include "../helpers/MessageInfoTag_m.h"
 
-#include "../LoRaMeshRouter/BroadcastFragment_m.h"
-#include "../LoRaMeshRouter/NodeAnnounce_m.h"
-#include "../LoRaCSMA/BroadcastLeaderFragment_m.h"
+#include "../messages/BroadcastFragment_m.h"
+#include "../messages/NodeAnnounce_m.h"
+#include "../messages/BroadcastLeaderFragment_m.h"
 
 namespace rlora {
 
@@ -143,8 +143,12 @@ void LoRaAloha::handleUpperPacket(Packet *packet)
 {
     // add header to queue
     const auto &payload = packet->peekAtFront<LoRaRobotPacket>();
-    bool retransmit = payload->isMission();
-    createBroadcastPacket(packet->getByteLength(), -1, -1, -1, retransmit);
+    bool isMission = payload->isMission();
+    int missionId = -2;
+    if (isMission) {
+        missionId = -1;
+    }
+    createBroadcastPacket(packet->getByteLength(), missionId, -1, -1, isMission);
 
     if (currentTxFrame == nullptr) {
         Packet *packetToSend = packetQueue.dequeuePacket();
@@ -311,6 +315,9 @@ void LoRaAloha::handlePacket(Packet *packet)
 
         int messageId = msg->getMessageId();
         int source = msg->getSource();
+        int missionId = msg->getMissionId();
+        bool isMissionMsg = msg->getRetransmit();
+
         if (incompletePacketList.getById(messageId) != nullptr) {
             // Paket schon erhalten. Vorbeugen von Duplikaten. Sollte nicht passieren eigentlich
             delete packet;
@@ -323,8 +330,15 @@ void LoRaAloha::handlePacket(Packet *packet)
             return;
         }
 
+        if (!latestMissionIdFromSourceMap.isNewMissionIdLarger(source, missionId)) {
+            // Mission schon erhalten
+            delete packet;
+            return;
+        }
+
         FragmentedPacket incompletePacket;
         incompletePacket.messageId = messageId;
+        incompletePacket.missionId = missionId;
         incompletePacket.sourceNode = source;
         incompletePacket.size = msg->getSize();
         incompletePacket.lastHop = msg->getHop();
@@ -336,11 +350,16 @@ void LoRaAloha::handlePacket(Packet *packet)
         incompletePacketList.add(incompletePacket);
         latestMessageIdMap.updateMessageId(source, messageId);
 
+        if (isMissionMsg) {
+            latestMissionIdFromSourceMap.updateMissionId(source, missionId);
+        }
+
         // wir senden schon mit dem ersten packet daten
         BroadcastFragment *fragmentPayload = new BroadcastFragment();
         fragmentPayload->setChunkLength(msg->getChunkLength());
         fragmentPayload->setPayloadSize(msg->getPayloadSize());
         fragmentPayload->setMessageId(messageId);
+        fragmentPayload->setMissionId(missionId);
         fragmentPayload->setSource(source);
         fragmentPayload->setFragment(0);
 
@@ -459,7 +478,7 @@ Packet* LoRaAloha::decapsulate(Packet *frame)
 void LoRaAloha::sendDataFrame()
 {
     auto frameToSend = getCurrentTransmission();
-    sendDown(frameToSend);
+    sendDown(frameToSend->dup());
 
     if (idToAddedTimeMap.find(frameToSend->getId()) != idToAddedTimeMap.end()) {
         SimTime previousTime = idToAddedTimeMap[frameToSend->getId()];
@@ -467,10 +486,13 @@ void LoRaAloha::sendDataFrame()
         emit(timeInQueue, delta);
     }
 
-    if (missionIds.count(frameToSend->getId())) {
-        emit(sentMissionId, frameToSend->getId());
-        missionIds.erase(frameToSend->getId());
+    auto typeTag = frameToSend->getTag<MessageInfoTag>();
+    if (!typeTag->isNeighbourMsg()) {
+        emit(sentMissionId, typeTag->getMissionId());
     }
+
+    frameToSend = nullptr;
+    delete frameToSend;
 }
 
 /****************************************************************
@@ -495,17 +517,18 @@ void LoRaAloha::retransmitPacket(FragmentedPacket fragmentedPacket)
     if (!fragmentedPacket.retransmit || fragmentedPacket.sourceNode == nodeId) {
         return;
     }
-    emit(receivedMissionId, fragmentedPacket.messageId);
-    createBroadcastPacket(fragmentedPacket.size, fragmentedPacket.messageId, nodeId, fragmentedPacket.sourceNode, fragmentedPacket.retransmit);
+    emit(receivedMissionId, fragmentedPacket.missionId);
+    createBroadcastPacket(fragmentedPacket.size, fragmentedPacket.missionId, nodeId, fragmentedPacket.sourceNode, fragmentedPacket.retransmit);
 }
 
-void LoRaAloha::createBroadcastPacket(int packetSize, int messageId, int hopId, int source, bool retransmit)
+void LoRaAloha::createBroadcastPacket(int packetSize, int missionId, int hopId, int source, bool retransmit)
 {
     auto headerPaket = new Packet("BroadcastLeaderFragment");
     auto headerPayload = makeShared<BroadcastLeaderFragment>();
+    int messageId = headerPaket->getId();
 
-    if (messageId == -1) {
-        messageId = headerPaket->getId();
+    if (missionId == -1) {
+        missionId = headerPaket->getId();
     }
     if (hopId == -1) {
         hopId = nodeId;
@@ -525,23 +548,24 @@ void LoRaAloha::createBroadcastPacket(int packetSize, int messageId, int hopId, 
         packetSize = 0;
     }
     headerPayload->setMessageId(messageId);
+    headerPayload->setMissionId(missionId);
     headerPayload->setSource(source);
     headerPayload->setHop(hopId);
     headerPayload->setRetransmit(retransmit);
     headerPaket->insertAtBack(headerPayload);
     headerPaket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
-    auto messageTypeTag = headerPaket->addTagIfAbsent<MessageTypeTag>();
-    messageTypeTag->setIsNeighbourMsg(!retransmit);
-    messageTypeTag->setIsHeader(true);
+
+    auto messageInfoTag = headerPaket->addTagIfAbsent<MessageInfoTag>();
+    messageInfoTag->setIsNeighbourMsg(!retransmit);
+    messageInfoTag->setMissionId(missionId);
+    messageInfoTag->setIsHeader(true);
+    messageInfoTag->setHasUsefulData(true);
 
     encapsulate(headerPaket);
 
     bool trackQueueTime = packetQueue.enqueuePacket(headerPaket);
     if (trackQueueTime) {
         idToAddedTimeMap[headerPaket->getId()] = simTime();
-    }
-    if (retransmit) {
-        missionIds.insert(messageId);
     }
 
     // INFO: das nullte packet ist das was im leader direkt mitgeschickt wird
@@ -562,13 +586,17 @@ void LoRaAloha::createBroadcastPacket(int packetSize, int messageId, int hopId, 
         }
 
         fragmentPayload->setMessageId(messageId);
+        fragmentPayload->setMissionId(missionId);
         fragmentPayload->setSource(source);
         fragmentPayload->setFragment(i++);
         fragmentPacket->insertAtBack(fragmentPayload);
         fragmentPacket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
-        auto messageTypeTag = fragmentPacket->addTagIfAbsent<MessageTypeTag>();
-        messageTypeTag->setIsNeighbourMsg(!retransmit);
-        messageTypeTag->setIsHeader(false);
+
+        auto messageInfoTag = fragmentPacket->addTagIfAbsent<MessageInfoTag>();
+        messageInfoTag->setIsNeighbourMsg(!retransmit);
+        messageInfoTag->setMissionId(missionId);
+        messageInfoTag->setIsHeader(false);
+        messageInfoTag->setHasUsefulData(true);
 
         encapsulate(fragmentPacket);
         packetQueue.enqueuePacket(fragmentPacket);
@@ -589,9 +617,9 @@ void LoRaAloha::announceNodeId(int respond)
 
     nodeAnnouncePacket->insertAtBack(nodeAnnouncePayload);
     nodeAnnouncePacket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
-    nodeAnnouncePacket->addTagIfAbsent<MessageTypeTag>()->setIsNeighbourMsg(false);
+    nodeAnnouncePacket->addTagIfAbsent<MessageInfoTag>()->setIsNeighbourMsg(false);
     auto fragmentEncap = encapsulate(nodeAnnouncePacket);
-    packetQueue.enqueuePacketAtPosition(fragmentEncap, 0);
+    packetQueue.enqueueNodeAnnounce(fragmentEncap);
 }
 
 bool LoRaAloha::isReceiving()

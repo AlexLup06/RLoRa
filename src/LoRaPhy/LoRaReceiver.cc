@@ -14,12 +14,13 @@
 // 
 
 #include "LoRaReceiver.h"
+
+#include "../helpers/DataLogger.h"
 #include "LoRaReception.h"
 #include "inet/physicallayer/wireless/common/analogmodel/packetlevel/ScalarNoise.h"
 #include "LoRaPhyPreamble_m.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/SignalTag_m.h"
-
-#include "../helpers/CollisionLogger.h"
+#include "../helpers/MessageInfoTag_m.h"
 
 namespace rlora {
 
@@ -118,10 +119,15 @@ bool LoRaReceiver::isPacketCollided(const IReception *reception, IRadioSignal::S
 
     bool isCollided = false;
     for (auto interferingReception : *interferingReceptions) {
-        int id1=reception->getTransmission()->getId();
+        int id1 = reception->getTransmission()->getId();
         int id2 = interferingReception->getTransmission()->getId();
 
-        CollisionLogger::getInstance()->logPossibleCollision(id1, id2);
+        auto messageInfoTag1 = reception->getTransmission()->getPacket()->getTag<MessageInfoTag>();
+        auto messageInfoTag2 = interferingReception->getTransmission()->getPacket()->getTag<MessageInfoTag>();
+
+        if (messageInfoTag1->getHasUsefulData() || messageInfoTag2->getHasUsefulData()) {
+            DataLogger::getInstance()->logPossibleCollision(id1, id2);
+        }
 
         bool overlap = false;
         bool frequencyCollision = false;
@@ -169,19 +175,12 @@ bool LoRaReceiver::isPacketCollided(const IReception *reception, IRadioSignal::S
         }
         LoRaReceiver *receiverInstance = check_and_cast<LoRaReceiver*>(getModuleByPath("."));
 
-        if (overlap && frequencyCollision) {
-            if (alohaChannelModel == true) {
-                receiverInstance->emit(receiverInstance->LoRaReceptionCollision, true);
-                isCollided = true;
-                CollisionLogger::getInstance()->logCollision(id1, id2);
-            }
-            if (alohaChannelModel == false) {
-                if (captureEffect == false && timingCollision) {
-                    receiverInstance->emit(receiverInstance->LoRaReceptionCollision, true);
-                    isCollided = true;
-                    CollisionLogger::getInstance()->logCollision(id1, id2);
-
-                }
+        if (overlap && frequencyCollision && captureEffect == false && timingCollision) {
+            receiverInstance->emit(receiverInstance->LoRaReceptionCollision, true);
+            isCollided = true;
+            if (messageInfoTag1->getHasUsefulData() || messageInfoTag2->getHasUsefulData()) {
+                EV << "Collision: " << reception->getTransmission()->getPacket()->getName() << ", WITH, " << interferingReception->getTransmission()->getPacket()->getName() << endl;
+                DataLogger::getInstance()->logCollision(id1, id2);
             }
 
         }

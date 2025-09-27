@@ -26,6 +26,8 @@
 #include "../LoRaPhy/LoRaTransmitter.h"
 #include "../LoRaPhy/LoRaReceiver.h"
 #include "../LoRaPhy/LoRaPhyPreamble_m.h"
+#include "../helpers/DataLogger.h"
+#include "../helpers/MessageInfoTag_m.h"
 
 namespace rlora {
 
@@ -43,7 +45,6 @@ void LoRaRadio::initialize(int stage)
     if (stage == INITSTAGE_LOCAL) {
         iAmGateway = par("iAmGateway").boolValue();
 
-        bytesReceived = registerSignal("bytesReceived");
         receivedId = registerSignal("receivedId");
     }
 }
@@ -434,12 +435,24 @@ void LoRaRadio::endReception(cMessage *timer)
         auto macFrame = medium->receivePacket(this, signal);
         take(macFrame);
         decapsulate(macFrame);
-        int multiplier = 1;
-        if (isReceptionPossible && !isReceptionAttempted) {
-            multiplier = -1;
+
+        auto tranmissionPacket = transmission->getPacket();
+        auto infoTag = tranmissionPacket->getTag<MessageInfoTag>();
+        bool isCollided = isReceptionPossible && !isReceptionAttempted;
+        if (!isCollided) {
+            if (infoTag->getHasUsefulData()) {
+                DataLogger::getInstance()->logEffectiveBytesReceived(infoTag->getPayloadSize());
+            }
+            DataLogger::getInstance()->logBytesReceived(tranmissionPacket->getByteLength());
         }
-        emit(bytesReceived, multiplier * macFrame->getByteLength());
-        emit(receivedId, multiplier * macFrame->getId());
+
+        // We define Bytes sent as all the possible nodes that are in range to receive the packet. So if a sends 10 bytes to b and c we have 20 bytes sent
+        if (isReceptionPossible) {
+            if (infoTag->getHasUsefulData()) {
+                DataLogger::getInstance()->logEffectiveBytesSent(infoTag->getPayloadSize());
+            }
+            DataLogger::getInstance()->logBytesSent(tranmissionPacket->getByteLength());
+        }
 
         if (isReceptionSuccessful)
             sendUp(macFrame);

@@ -28,12 +28,14 @@ public:
 
     // Queue operations
     bool enqueuePacket(Packet *pkt);
+    void enqueueNodeAnnounce(Packet *pkt);
     void enqueuePacketAtPosition(Packet *pkt, int pos);
     Packet* dequeuePacket();
     void removePacketAtPosition(int pos);
     void removePacket(Packet *entry);
     bool isEmpty() const;
     int size() const;
+    string toString() const;
 };
 
 } /* namespace rlora */

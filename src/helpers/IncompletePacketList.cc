@@ -63,6 +63,16 @@ void IncompletePacketList::removeBySource(int source)
     }
 }
 
+// The messageIds are only the same from the same sender
+bool IncompletePacketList::isFromSameHop(int messageId)
+{
+    FragmentedPacket *incompletePacket = getById(messageId);
+    if (incompletePacket == nullptr) {
+        return false;
+    }
+    return true;
+}
+
 Result IncompletePacketList::addToIncompletePacket(const BroadcastFragment *packet)
 {
     FragmentedPacket *incompletePacket = getById(packet->getMessageId());
@@ -71,6 +81,7 @@ Result IncompletePacketList::addToIncompletePacket(const BroadcastFragment *pack
     if (incompletePacket == nullptr) {
         result.isComplete = false;
         result.sendUp = false;
+        result.isRelevant = false;
         result.waitTime = 40 + predictSendTime(255);
         return result;
     }

@@ -19,7 +19,6 @@
 #include "LoRaPhyPreamble_m.h"
 #include "../LoRa/LoRaMacFrame_m.h"
 #include <algorithm>
-#include "../LoRaMeshRouter/BroadcastHeader_m.h"
 
 namespace rlora {
 
@@ -85,7 +84,6 @@ const ITransmission* LoRaTransmitter::createTransmission(const IRadio *transmitt
 
     int payloadSize = B(macFrame->getByteLength()).get();
 
-//    EV << "I am sending " << macSize + payloadSize << "Bytes" << endl;
 
     // for us mac header and payload are the "real Payload"
     payloadBytes = payloadSize;

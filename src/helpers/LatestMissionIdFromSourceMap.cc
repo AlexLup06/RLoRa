@@ -29,6 +29,10 @@ bool LatestMissionIdFromSourceMap::updateMissionId(int nodeId, int newMessageId)
 
 bool LatestMissionIdFromSourceMap::isNewMissionIdLarger(int nodeId, int newMessageId) const
 {
+    if (newMessageId < 0) {
+        // this is not a mission message
+        return true;
+    }
     auto it = latestMessageIds_.find(nodeId);
     if (it == latestMessageIds_.end()) {
         return true; // No messageId yet, so it's considered "larger"

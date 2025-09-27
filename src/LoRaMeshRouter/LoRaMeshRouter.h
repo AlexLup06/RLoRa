@@ -18,6 +18,7 @@
 #include "../helpers/CustomPacketQueue.h"
 #include "../helpers/IncompletePacketList.h"
 #include "../helpers/LatestMessageIdMap.h"
+#include "../helpers/LatestMissionIdFromSourceMap.h"
 
 using namespace inet;
 using namespace physicallayer;
@@ -57,7 +58,6 @@ protected:
     simsignal_t receivedMissionId;
 
     map<int, SimTime> idToAddedTimeMap;
-    unordered_set<int> missionIds;
 
     cMessage *waitDelay = nullptr;
     cMessage *mediumStateChange = nullptr;
@@ -72,6 +72,8 @@ protected:
     CustomPacketQueue packetQueue;
     LatestMessageIdMap latestMessageIdMap;
     LoRaRadio *loRaRadio;
+    LatestMissionIdFromSourceMap latestMissionIdFromSourceMap;
+
 
 //    Packet *currentNodeAnnounceFrame = nullptr;
 public:
@@ -144,10 +146,10 @@ protected:
 
     void senderWaitDelay(int waitTime);
     void announceNodeId(int respond);
-    void createBroadcastPacket(int packetSize, int messageId, int hopId, int source, bool retransmit);
+    void createBroadcastPacket(int packetSize, int missionId, int hopId, int source, bool retransmit);
     void retransmitPacket(FragmentedPacket fragmentedPacket);
 };
 
-} // namespace inet
+} // namespace rlora
 
 #endif // ifndef __LoRaMeshRouter_H

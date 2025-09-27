@@ -7,53 +7,6 @@ value = os.getenv("rlora_root")
 root_dir = value+"/data"
 
 
-
-
-
-def formatBytesReceived(root,filename):
-    filepath = os.path.join(root, filename)
-
-    try:
-        with open(filepath, "r") as f:
-            data = json.load(f)
-
-        # Top-level key (e.g., "MassMobility-...")
-        top_key = next(iter(data))
-        experiment = data[top_key]
-
-        newVector = []
-
-        # just loop through each vector and add the up the posisitive values into one single value. this is all received bytes
-        # also add up the absolute values. this is the number of bytes that could have been received
-        for vector in experiment.get("vectors", []):
-            positiveSum = 0
-            absoluteSum = 0
-
-            for value in vector["value"]:
-                if value >= 0:
-                    positiveSum = positiveSum + value
-                
-                absoluteSum = absoluteSum + abs(value)
-
-            valuePair = {
-                "positiveSum":positiveSum,
-                "absoluteSum":absoluteSum
-            }
-
-            newVector.append(valuePair)
-
-        experiment["vectors"] = newVector
-                
-
-        # Write back the updated JSON
-        with open(filepath, "w") as f:
-            json.dump(data, f, indent=2)
-
-
-    except Exception as e:
-        print(f"❌ Failed to process {filepath}: {e}")
-
-
 # TODO!!!!!
 def  formatReceivedAndSentMissionId(root,filename):
     filepath = os.path.join(root, filename)
@@ -223,6 +176,3 @@ for root, dirs, files in os.walk(root_dir):
 
         #if re.match(r'^missionId-\d+\.json$', filename): 
          #   formatReceivedAndSentMissionId(root,filename)
-
-        if re.match(r'^bytesReceived-\d+\.json$', filename): 
-            formatBytesReceived(root,filename)
