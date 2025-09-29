@@ -362,6 +362,9 @@ void LoRaRadio::startReception(cMessage *timer, IRadioSignal::SignalPart part)
             receptionTimer = timer;
             emit(receptionStartedSignal, check_and_cast<const cObject*>(reception));
         }
+        else
+            EV_INFO << "Reception started: \x1b[1mignoring\x1b[0m " << (IWirelessSignal*) signal << " " << IRadioSignal::getSignalPartName(part) << " as " << reception << endl;
+
     }
     else
         EV_INFO << "Reception started: \x1b[1mignoring\x1b[0m " << (IWirelessSignal*) signal << " " << IRadioSignal::getSignalPartName(part) << " as " << reception << endl;
@@ -372,6 +375,7 @@ void LoRaRadio::startReception(cMessage *timer, IRadioSignal::SignalPart part)
     // TODO move to radio medium
     check_and_cast<RadioMedium*>(medium.get())->emit(IRadioMedium::signalArrivalStartedSignal, check_and_cast<const cObject*>(reception));
 }
+
 
 void LoRaRadio::continueReception(cMessage *timer)
 {
@@ -439,6 +443,7 @@ void LoRaRadio::endReception(cMessage *timer)
         auto tranmissionPacket = transmission->getPacket();
         auto infoTag = tranmissionPacket->getTag<MessageInfoTag>();
         bool isCollided = isReceptionPossible && !isReceptionAttempted;
+
         if (!isCollided) {
             if (infoTag->getHasUsefulData()) {
                 DataLogger::getInstance()->logEffectiveBytesReceived(infoTag->getPayloadSize());
@@ -464,14 +469,51 @@ void LoRaRadio::endReception(cMessage *timer)
         emit(receptionEndedSignal, check_and_cast<const cObject*>(reception));
 
     }
-    else
+    else{
         EV_INFO << "Reception ended: \x1b[1mignoring\x1b[0m " << (IWirelessSignal*) signal << " " << IRadioSignal::getSignalPartName(part) << " as " << reception << endl;
+    }
     updateTransceiverState();
     updateTransceiverPart();
     delete timer;
+
 // TODO: move to radio medium
     check_and_cast<RadioMedium*>(medium.get())->emit(IRadioMedium::signalArrivalEndedSignal, check_and_cast<const cObject*>(reception));
 }
+
+//if (isReceptionPossible) {
+//    if (infoTag->getHasUsefulData()) {
+//        DataLogger::getInstance()->logEffectiveBytesSent(infoTag->getPayloadSize());
+//    }
+//    DataLogger::getInstance()->logBytesSent(tranmissionPacket->getByteLength());
+//}
+//
+//if (isReceptionSuccessful) {
+//    sendUp(macFrame);
+//    check_and_cast<RadioMedium*>(medium.get())->emit(IRadioMedium::signalArrivalEndedSignal, check_and_cast<const cObject*>(reception));
+//}
+//else {
+//    check_and_cast<RadioMedium*>(medium.get())->emit(IRadioMedium::signalArrivalEndedSignal, check_and_cast<const cObject*>(reception));
+//    emit(LoRaRadio::droppedPacket, 0);
+//    delete reception;
+//    reception = nullptr;
+//    delete macFrame;
+//}
+//receptionTimer = nullptr;
+//emit(receptionEndedSignal, check_and_cast<const cObject*>(reception));
+//
+//}
+//else {
+//check_and_cast<RadioMedium*>(medium.get())->emit(IRadioMedium::signalArrivalEndedSignal, check_and_cast<const cObject*>(reception));
+//EV_INFO << "Reception ended: \x1b[1mignoring\x1b[0m " << (IWirelessSignal*) signal << " " << IRadioSignal::getSignalPartName(part) << " as " << reception << endl;
+//auto macFrame = medium->receivePacket(this, signal);
+//delete reception;
+//reception = nullptr;
+//take(macFrame);
+//delete macFrame;
+//}
+//updateTransceiverState();
+//updateTransceiverPart();
+//delete timer;
 
 void LoRaRadio::abortReception(cMessage *timer)
 {
@@ -517,7 +559,32 @@ void LoRaRadio::sendUp(Packet *macFrame)
     NarrowbandRadioBase::sendUp(macFrame);
 //send(macFrame, upperLayerOut);
 }
-
+//void LoRaRadio::setRadioMode(RadioMode newRadioMode)
+//{
+//    Enter_Method("setRadioMode");
+//    if (newRadioMode < RADIO_MODE_OFF || newRadioMode > RADIO_MODE_SWITCHING)
+//        throw cRuntimeError("Unknown radio mode: %d", newRadioMode);
+//    else if (newRadioMode == RADIO_MODE_SWITCHING)
+//        throw cRuntimeError("Cannot switch manually to RADIO_MODE_SWITCHING");
+//    else if (radioMode == RADIO_MODE_SWITCHING || switchTimer->isScheduled())
+//        throw cRuntimeError("Cannot switch to a new radio mode while another switch is in progress");
+//    else if (newRadioMode != radioMode && newRadioMode != nextRadioMode) {
+//
+//        if (isReceiverMode(radioMode) && receptionTimer != nullptr) {
+//            EV_WARN << "Aborting reception before switching radio mode" << endl;
+//            abortReception(receptionTimer);
+////            cancelAndDelete(receptionTimer);
+////            receptionTimer = nullptr;
+//        }
+//
+//        simtime_t switchingTime = switchingTimes[radioMode][newRadioMode];
+//        if (switchingTime != 0)
+//            startRadioModeSwitch(newRadioMode, switchingTime);
+//
+//        else
+//            completeRadioModeSwitch(newRadioMode);
+//    }
+//}
 //double LoRaRadio::getCurrentTxPower()
 //{
 //    return currentTxPower;

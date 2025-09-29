@@ -13,12 +13,12 @@
 // along with this program.  If not, see http://www.gnu.org/licenses/.
 // 
 
-package rlora.LoRaMeshRouterRTSCTS;
+package rlora.LoRaMeshRouterTunedRTSCTS;
 
 import inet.linklayer.base.MacProtocolBase;
 import inet.linklayer.contract.IMacProtocol;
 
-module LoRaMeshRouterRTSCTS extends MacProtocolBase like IMacProtocol
+module LoRaMeshRouterTunedRTSCTS extends MacProtocolBase like IMacProtocol
 {
     parameters:
         string radioModule = default("^.radio"); // The path to the Radio module 
@@ -31,7 +31,7 @@ module LoRaMeshRouterRTSCTS extends MacProtocolBase like IMacProtocol
         @statistic[sentMissionId](source=sentMissionId; record=vector; interpolationmode=none; unit=Bps);
         @statistic[receivedMissionId](source=receivedMissionId; record=vector; interpolationmode=none; unit=Bps);
 
-        @class(LoRaMeshRouterRTSCTS);
+        @class(LoRaMeshRouterTunedRTSCTS);
     gates:
         input upperMgmtIn;
         output upperMgmtOut;

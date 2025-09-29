@@ -82,6 +82,7 @@ protected:
     cMessage *transmitSwitchDone = nullptr;
     cMessage *nodeAnnounce = nullptr;
     cMessage *receptionStated = nullptr;
+    cMessage *moreMessagesToSend = nullptr;
 
     int nodeId = -1;
     IncompletePacketList incompletePacketList;
@@ -162,7 +163,7 @@ protected:
 
     void senderWaitDelay(int waitTime);
     void announceNodeId(int respond);
-    void createBroadcastPacket(int packetSize, int missionId, int hopId, int source, bool retransmit);
+    void createBroadcastPacket(int payloadSize, int missionId, int source, bool retransmit);
     void retransmitPacket(FragmentedPacket fragmentedPacket);
 };
 

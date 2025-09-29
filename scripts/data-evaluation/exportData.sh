@@ -40,7 +40,7 @@ for file in ${SOURCE_DIR}*.txt; do
         range="${BASH_REMATCH[2]}m"
         
         DEST_DIR="$rlora_root/data/${protocol}/${range}/"
-        mv "$file" "$DEST_DIR"
+        cp "$file" "$DEST_DIR"
     fi
 done
 

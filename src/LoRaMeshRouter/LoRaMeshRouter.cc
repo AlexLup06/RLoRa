@@ -162,12 +162,6 @@ void LoRaMeshRouter::handleSelfMessage(cMessage *msg)
     handleWithFsm(msg);
 }
 
-/**
- * For "serial" messages that we receive from the App (Host Application), we put a BroadcastHeader and
- * as many BroadcastFragments as needed in the packetQueue. If such a BroadcastPacket already exists, we just update that one
- * If there is no currentTxFrame - basically the next packet to send - we pull the next packet from the Queue and set it to currentTxFrame
- * If we are free to send handleWithFsm will send, otherwise handleWithFsm just does nothing
- */
 void LoRaMeshRouter::handleUpperPacket(Packet *packet)
 {
     const auto &payload = packet->peekAtFront<LoRaRobotPacket>();
@@ -176,7 +170,7 @@ void LoRaMeshRouter::handleUpperPacket(Packet *packet)
     if (isMission) {
         missionId = -1;
     }
-    createBroadcastPacket(packet->getByteLength(), missionId, -1, -1, isMission);
+    createBroadcastPacket(packet->getByteLength(), missionId, -1, isMission);
 
     if (currentTxFrame == nullptr) {
         Packet *packetToSend = packetQueue.dequeuePacket();
@@ -374,6 +368,7 @@ void LoRaMeshRouter::handlePacket(Packet *packet)
         incompletePacketList.add(incompletePacket);
         latestMessageIdMap.updateMessageId(source, messageId);
 
+        // TODO: where goes this
         if (isMissionMsg) {
             latestMissionIdFromSourceMap.updateMissionId(source, missionId);
         }
@@ -400,11 +395,6 @@ void LoRaMeshRouter::handlePacket(Packet *packet)
             }
             incompletePacketList.removeById(msg->getMessageId());
         }
-    }
-    // TODO: delete?
-    else {
-        throw cRuntimeError("Received Unknown message");
-
     }
     delete packet;
 }
@@ -510,9 +500,6 @@ void LoRaMeshRouter::sendDataFrame()
     if (!typeTag->isNeighbourMsg()) {
         emit(sentMissionId, typeTag->getMissionId());
     }
-
-    frameToSend = nullptr;
-    delete frameToSend;
 }
 
 /****************************************************************
@@ -520,9 +507,7 @@ void LoRaMeshRouter::sendDataFrame()
  */
 void LoRaMeshRouter::finishCurrentTransmission()
 {
-    if (currentTxFrame != nullptr) {
-        currentTxFrame = nullptr;
-    }
+    deleteCurrentTxFrame();
 }
 
 Packet* LoRaMeshRouter::getCurrentTransmission()
@@ -538,11 +523,11 @@ void LoRaMeshRouter::retransmitPacket(FragmentedPacket fragmentedPacket)
         return;
     }
     emit(receivedMissionId, fragmentedPacket.missionId);
-    createBroadcastPacket(fragmentedPacket.size, fragmentedPacket.missionId, nodeId, fragmentedPacket.sourceNode, fragmentedPacket.retransmit);
+    createBroadcastPacket(fragmentedPacket.size, fragmentedPacket.missionId, fragmentedPacket.sourceNode, fragmentedPacket.retransmit);
 }
 
 // define as payload Size
-void LoRaMeshRouter::createBroadcastPacket(int packetSize, int missionId, int hopId, int source, bool retransmit)
+void LoRaMeshRouter::createBroadcastPacket(int payloadSize, int missionId, int source, bool retransmit)
 {
     auto headerPaket = new Packet("BroadcastHeaderPkt");
     auto headerPayload = makeShared<BroadcastHeader>();
@@ -551,19 +536,17 @@ void LoRaMeshRouter::createBroadcastPacket(int packetSize, int missionId, int ho
     if (missionId == -1) {
         missionId = headerPaket->getId();
     }
-    if (hopId == -1) {
-        hopId = nodeId;
-    }
+
     if (source == -1) {
         source = nodeId;
     }
 
     headerPayload->setChunkLength(B(BROADCAST_HEADER_SIZE));
-    headerPayload->setSize(packetSize);
+    headerPayload->setSize(payloadSize);
     headerPayload->setMissionId(missionId);
     headerPayload->setMessageId(messageId);
     headerPayload->setSource(source);
-    headerPayload->setHop(hopId);
+    headerPayload->setHop(nodeId);
     headerPayload->setRetransmit(retransmit);
     headerPaket->insertAtBack(headerPayload);
     headerPaket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
@@ -583,19 +566,22 @@ void LoRaMeshRouter::createBroadcastPacket(int packetSize, int missionId, int ho
     }
 
     int i = 0;
-    while (packetSize > 0) {
+    while (payloadSize > 0) {
         auto fragmentPacket = new Packet("BroadcastFragmentPkt");
         auto fragmentPayload = makeShared<BroadcastFragment>();
 
-        if (packetSize + BROADCAST_FRAGMENT_META_SIZE > 255) {
+        int currentPayloadSize = 0;
+        if (payloadSize + BROADCAST_FRAGMENT_META_SIZE > 255) {
+            currentPayloadSize = 255 - BROADCAST_FRAGMENT_META_SIZE;
             fragmentPayload->setChunkLength(B(255));
-            fragmentPayload->setPayloadSize(255 - BROADCAST_FRAGMENT_META_SIZE);
-            packetSize = packetSize - (255 - BROADCAST_FRAGMENT_META_SIZE);
+            fragmentPayload->setPayloadSize(currentPayloadSize);
+            payloadSize = payloadSize - currentPayloadSize;
         }
         else {
-            fragmentPayload->setChunkLength(B(packetSize + BROADCAST_FRAGMENT_META_SIZE));
-            fragmentPayload->setPayloadSize(packetSize);
-            packetSize = 0;
+            currentPayloadSize = payloadSize;
+            fragmentPayload->setChunkLength(B(currentPayloadSize + BROADCAST_FRAGMENT_META_SIZE));
+            fragmentPayload->setPayloadSize(currentPayloadSize);
+            payloadSize = 0;
         }
 
         fragmentPayload->setMissionId(missionId);
@@ -610,9 +596,9 @@ void LoRaMeshRouter::createBroadcastPacket(int packetSize, int missionId, int ho
         messageInfoTag->setMissionId(missionId);
         messageInfoTag->setIsHeader(false);
         messageInfoTag->setHasUsefulData(true);
-        // TODO: setPayloadSize,hasUsefulData
+        messageInfoTag->setPayloadSize(currentPayloadSize);
 
-        if (packetSize == 0) {
+        if (payloadSize == 0) {
             auto waitTimeTag = fragmentPacket->addTagIfAbsent<WaitTimeTag>();
             waitTimeTag->setWaitTime(50 + 270 + intuniform(0, 50));
         }
@@ -640,13 +626,16 @@ void LoRaMeshRouter::announceNodeId(int respond)
 
     nodeAnnouncePacket->insertAtBack(nodeAnnouncePayload);
     nodeAnnouncePacket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
-    nodeAnnouncePacket->addTagIfAbsent<MessageInfoTag>()->setIsNeighbourMsg(false);
+
+    auto messageInfoTag = nodeAnnouncePacket->addTagIfAbsent<MessageInfoTag>();
+    messageInfoTag->setIsNeighbourMsg(false);
+    messageInfoTag->setIsNodeAnnounce(true);
 
     auto waitTimeTag = nodeAnnouncePacket->addTagIfAbsent<WaitTimeTag>();
     waitTimeTag->setWaitTime(0);
 
-    auto fragmentEncap = encapsulate(nodeAnnouncePacket);
-    packetQueue.enqueueNodeAnnounce(fragmentEncap);
+    encapsulate(nodeAnnouncePacket);
+    packetQueue.enqueueNodeAnnounce(nodeAnnouncePacket);
 }
 
 bool LoRaMeshRouter::isReceiving()

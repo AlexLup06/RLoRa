@@ -32,24 +32,6 @@ using namespace inet;
 class LoRaCSMA : public MacProtocolBase, public IMacProtocol, public queueing::IActivePacketSink
 {
 protected:
-    /**
-     * @name Configuration parameters
-     */
-    //@{
-    FcsMode fcsMode;
-    bool useAck = true;
-    double bitrate = NaN;
-    B headerLength = B(-1);
-    B ackLength = B(-1);
-    simtime_t ackTimeout = -1;
-    simtime_t slotTime = -1;
-    simtime_t sifsTime = -1;
-    simtime_t difsTime = -1;
-    int retryLimit = -1;
-    int cwMin = -1;
-    int cwMax = -1;
-    int cwMulticast = -1;
-    //@}
     LatestMissionIdFromSourceMap latestMissionIdFromSourceMap;
 
     IRadio *radio = nullptr;
@@ -58,15 +40,25 @@ protected:
     IncompletePacketList incompletePacketList;
     CustomPacketQueue packetQueue;
     LatestMessageIdMap latestMessageIdMap;
+
     cMessage *nodeAnnounce = nullptr;
     cMessage *transmitSwitchDone = nullptr;
     cMessage *receptionStated = nullptr;
-    int nodeId = -1;
+    cMessage *throughputTimer = nullptr;
+    cMessage *endBackoff = nullptr;
+    cMessage *endData = nullptr;
+    cMessage *mediumStateChange = nullptr;
 
+    simtime_t slotTime = 0.200;
     simtime_t measurementInterval = 1.0;  // 1 second
+    simtime_t backoffPeriod = -1;
+
+    int nodeId = -1;
     long bytesReceivedInInterval = 0;
     long effectiveBytesReceivedInInterval = 0;
-    cMessage *throughputTimer = nullptr;
+    double bitrate = NaN;
+    int cw = 8;
+
     simsignal_t throughputSignal;
     simsignal_t effectiveThroughputSignal;
     simsignal_t timeInQueue;
@@ -74,11 +66,7 @@ protected:
     simsignal_t receivedMissionId;
 
     map<int, SimTime> idToAddedTimeMap;
-    /**
-     * @name LoRaCSMA state variables
-     * Various state information checked and modified according to the state machine.
-     */
-    //@{
+
     enum State
     {
         SWITCHING, LISTENING, DEFER, BACKOFF, TRANSMIT, RECEIVE,
@@ -89,37 +77,6 @@ protected:
 
     cFSM fsm;
 
-    /** Remaining backoff period in seconds */
-    simtime_t backoffPeriod = -1;
-
-    /** Number of frame retransmission attempts. */
-    int retryCounter = -1;
-    //@}
-
-    /** @name Timer messages */
-    //@{
-    /** End of the backoff period */
-    cMessage *endBackoff = nullptr;
-
-    /** Timeout after the transmission of a Data frame */
-    cMessage *endData = nullptr;
-
-    /** Radio state change self message. Currently this is optimized away and sent directly */
-    cMessage *mediumStateChange = nullptr;
-    //@}
-
-    /** @name Statistics */
-    //@{
-    long numRetry;
-    long numSentWithoutRetry;
-    long numGivenUp;
-    long numCollision;
-    long numSent;
-    long numReceived;
-    long numSentBroadcast;
-    long numReceivedBroadcast;
-    //@}
-
 public:
     /**
      * @name Construction functions
@@ -128,7 +85,7 @@ public:
     virtual ~LoRaCSMA();
 
     virtual MacAddress getAddress();
-    void createBroadcastPacket(int packetSize, int missionId, int hopId, int source, bool retransmit);
+    void createBroadcastPacket(int payloadSize, int missionId, int source, bool retransmit);
     void announceNodeId(int respond);
     void handlePacket(Packet *packet);
     void retransmitPacket(FragmentedPacket fragmentedPacket);

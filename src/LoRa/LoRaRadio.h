@@ -157,6 +157,7 @@ public:
     virtual IRadioSignal::SignalPart getReceivedSignalPart() const override;
 
     virtual void decapsulate(Packet *packet) const override;
+//    virtual void setRadioMode(RadioMode newRadioMode) const override;
 };
 
 } // namespace inet

@@ -117,8 +117,11 @@ bool LoRaReceiver::isPacketCollided(const IReception *reception, IRadioSignal::S
     EV << "Signal RSSI in dBm: " << signalRSSI_dBm << endl;
     int receptionSF = loRaReception->getLoRaSF();
 
+
     bool isCollided = false;
+    EV << "Before for " << endl;
     for (auto interferingReception : *interferingReceptions) {
+        EV << "in for " << endl;
         int id1 = reception->getTransmission()->getId();
         int id2 = interferingReception->getTransmission()->getId();
 
@@ -201,6 +204,12 @@ Packet* LoRaReceiver::computeReceivedPacket(const ISnir *snir, bool isReceptionS
     auto transmittedPacket = snir->getReception()->getTransmission()->getPacket();
     auto receivedPacket = transmittedPacket->dup();
     receivedPacket->clearTags();
+
+    auto msgInfoTag = transmittedPacket->findTag<MessageInfoTag>();
+    if (msgInfoTag != nullptr) {
+        auto newTag = receivedPacket->addTag<MessageInfoTag>();
+        *newTag = *msgInfoTag; // copy contents
+    }
 //    receivedPacket->addTag<PacketProtocolTag>()->setProtocol(transmittedPacket->getTag<PacketProtocolTag>()->getProtocol());
     if (!isReceptionSuccessful)
         receivedPacket->setBitError(true);

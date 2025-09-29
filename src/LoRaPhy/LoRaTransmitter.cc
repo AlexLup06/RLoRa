@@ -66,32 +66,33 @@ const ITransmission* LoRaTransmitter::createTransmission(const IRadio *transmitt
     const_cast<LoRaTransmitter*>(this)->emit(LoRaTransmissionCreated, true);
 
     EV << "[MSDebug] I am sending packet with Frame Bzte: " << macFrame->getByteLength() << endl;
-
-//    const LoRaMacFrame *frame = check_and_cast<const LoRaMacFrame *>(macFrame);
     EV << macFrame->getDetailStringRepresentation(evFlags) << endl;
     const auto &frame = macFrame->peekAtFront<LoRaPhyPreamble>();
 
+    double sf = frame->getSpreadFactor();
+    double bw = frame->getBandwidth().get();
+    double cr = frame->getCodeRendundance();
+
+//    const LoRaMacFrame *frame = check_and_cast<const LoRaMacFrame *>(macFrame);
+
     int nPreamble = 12;
-    simtime_t Tsym = (pow(2, frame->getSpreadFactor())) / (frame->getBandwidth().get() / 1000);
+    simtime_t Tsym = (pow(2, sf)) / (bw / 1000);
     simtime_t Tpreamble = (nPreamble + 4.25) * Tsym / 1000;
+    simtime_t Theader = 8 * Tsym / 1000;
 
     int payloadBytes = 0;
 
     const auto &mac = macFrame->peekDataAt<LoRaMacFrame>(frame->getChunkLength());
-    int macSize = B(mac->getChunkLength()).get();
+    double macSize = B(mac->getChunkLength()).get();
 
     const auto &payload = macFrame->peekDataAt(frame->getChunkLength() + mac->getChunkLength());
 
-    int payloadSize = B(macFrame->getByteLength()).get();
-
+    double payloadSize = B(macFrame->getByteLength()).get();
 
     // for us mac header and payload are the "real Payload"
     payloadBytes = payloadSize;
-    int payloadSymbNb = 8;
-    payloadSymbNb += std::ceil((8 * payloadBytes - 4 * frame->getSpreadFactor() + 28 + 16 - 20 * 0) / (4 * (frame->getSpreadFactor() - 2 * 0))) * (frame->getCodeRendundance() + 4);
-    if (payloadSymbNb < 8)
-        payloadSymbNb = 8;
-    simtime_t Theader = 0;
+
+    double payloadSymbNb = std::ceil((8 * payloadBytes - 4 * sf + 28 + 16 - 20 * 0) / (4 * (sf - 2 * 0))) * (cr + 4);
     simtime_t Tpayload = payloadSymbNb * Tsym / 1000;
 
     const simtime_t duration = Tpreamble + Theader + Tpayload;

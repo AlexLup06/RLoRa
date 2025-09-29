@@ -73,11 +73,25 @@ public:
     void removeById(int messageId);
     void add(const FragmentedPacket &packet);
     void removeBySource(int source);
-    Result addToIncompletePacket(const BroadcastFragment *fragment);
     bool isFromSameHop(int messageId);
+    Result addToIncompletePacket(const BroadcastFragment *fragment);
+
+    void updateMessageId(int sourceId, int newMessageId);
+    void updateMissionId(int sourceId, int newMissionId);
+
+    bool isNewMissionIdLower(int sourceId, int newMissionId) const;
+    bool isNewMissionIdSame(int sourceId, int newMissionId) const;
+    bool isNewMissionIdHigher(int sourceId, int newMissionId) const;
+
+    bool isNewMessageIdLower(int sourceId, int newMessageId) const;
+    bool isNewMessageIdSame(int sourceId, int newMessageId) const;
+    bool isNewMessageIdHigher(int sourceId, int newMessageId) const;
 
 private:
     std::vector<FragmentedPacket> packets_;
+    std::unordered_map<int, int> latestMessageIds_;
+    std::unordered_map<int, int> latestMissionIds_;
+
 };
 
 } // namespace rlora

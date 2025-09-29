@@ -146,7 +146,7 @@ protected:
 
     void senderWaitDelay(int waitTime);
     void announceNodeId(int respond);
-    void createBroadcastPacket(int packetSize, int missionId, int hopId, int source, bool retransmit);
+    void createBroadcastPacket(int payloadSize, int hopId, int source, bool retransmit);
     void retransmitPacket(FragmentedPacket fragmentedPacket);
 };
 

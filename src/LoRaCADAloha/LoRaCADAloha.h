@@ -13,8 +13,8 @@
 // along with this program.  If not, see http://www.gnu.org/licenses/.
 // 
 
-#ifndef LORAMESHROUTERRTSCTS_LORAMESHROUTERRTSCTS_H_
-#define LORAMESHROUTERRTSCTS_LORAMESHROUTERRTSCTS_H_
+#ifndef LORACADALOHA_LORACADALOHA_H_
+#define LORACADALOHA_LORACADALOHA_H_
 
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IRadio.h"
 #include "inet/linklayer/contract/IMacProtocol.h"
@@ -44,7 +44,7 @@ namespace rlora {
  * Based on CSMA class
  */
 
-class LoRaMeshRouterRTSCTS : public MacProtocolBase, public IMacProtocol, public queueing::IActivePacketSink
+class LoRaCADAloha : public MacProtocolBase, public IMacProtocol, public queueing::IActivePacketSink
 {
 
 protected:
@@ -54,7 +54,7 @@ protected:
 
     enum State
     {
-        SWITCHING, DEFER, BACKOFF, SEND_RTS, WAIT_CTS, TRANSMITING, SEND_CTS, LISTENING, RECEIVING, CW_CTS, AWAIT_TRANSMISSION
+        SWITCHING, TRANSMITING, LISTENING, RECEIVING
     };
 
     IRadio *radio = nullptr;
@@ -63,57 +63,41 @@ protected:
 
     cFSM fsm;
 
+    simtime_t measurementInterval = 1.0;  // 1 second
+    long bytesReceivedInInterval = 0;
+    long effectiveBytesReceivedInInterval = 0;
+    cMessage *throughputTimer = nullptr;
     simsignal_t throughputSignal;
     simsignal_t effectiveThroughputSignal;
     simsignal_t timeInQueue;
     simsignal_t sentMissionId;
     simsignal_t receivedMissionId;
 
-    simtime_t measurementInterval = 1.0;
-    simtime_t backoffPeriod = -1;
-    simtime_t ctsCWPeriod = -1;
-    simtime_t sifs = 0.002;
-    simtime_t backoffFS = 0.021; // timeOnAir of Header + 0.001 puffer
-    simtime_t ctsFS = 0.018; // timeOnAir of Header + 0.0005 puffer
-    int cwCTS = 16;
-    int cwBackoff = 8;
 
-    long bytesReceivedInInterval = 0;
-    long effectiveBytesReceivedInInterval = 0;
-    int size_CTSData = -1;
-    int source_CTSData = -1;
-    int rtsSource = -1;
-    int nodeId = -1;
+    map<int, SimTime> idToAddedTimeMap;
 
     cMessage *mediumStateChange = nullptr;
-    cMessage *endBackoff = nullptr;
     cMessage *droppedPacket = nullptr;
     cMessage *endTransmission = nullptr;
     cMessage *transmitSwitchDone = nullptr;
     cMessage *nodeAnnounce = nullptr;
-    cMessage *CTSWaitTimeout = nullptr;
-    cMessage *receivedCTS = nullptr;
-    cMessage *endOngoingMsg = nullptr;
-    cMessage *initiateCTS = nullptr;
-    cMessage *transmissionStartTimeout = nullptr;
-    cMessage *gotNewMessagToSend = nullptr;
-    cMessage *throughputTimer = nullptr;
-    cMessage *ctsCWTimeout = nullptr;
-    cMessage *moreMessagesToSend = nullptr;
+    cMessage *receptionStated = nullptr;
 
+    int nodeId = -1;
     IncompletePacketList incompletePacketList;
     CustomPacketQueue packetQueue;
+    LatestMessageIdMap latestMessageIdMap;
     LoRaRadio *loRaRadio;
     LatestMissionIdFromSourceMap latestMissionIdFromSourceMap;
-    map<int, SimTime> idToAddedTimeMap;
 
 
+//    Packet *currentNodeAnnounceFrame = nullptr;
 public:
     /**
      * @name Construction functions
      */
     //@{
-    virtual ~LoRaMeshRouterRTSCTS();
+    virtual ~LoRaCADAloha();
     //@}
     virtual MacAddress getAddress();
     virtual queueing::IPassivePacketSource* getProvider(cGate *gate) override;
@@ -141,27 +125,12 @@ protected:
     virtual void handleLowerPacket(Packet *packet) override;
     virtual void handleWithFsm(cMessage *msg);
     void handlePacket(Packet *packet);
-    void handleCTSTimeout();
-    void handleCTS(Packet *pkt);
 
     virtual void receiveSignal(cComponent *source, simsignal_t signalID, intval_t value, cObject *details) override;
 
+    virtual Packet* encapsulate(Packet *msg);
+    virtual Packet* decapsulate(Packet *frame);
     //@}
-
-    // backoff
-    virtual void invalidateBackoffPeriod();
-    virtual bool isInvalidBackoffPeriod();
-    virtual void generateBackoffPeriod();
-    virtual void decreaseBackoffPeriod();
-    virtual void scheduleBackoffTimer();
-    virtual void cancelBackoffTimer();
-
-    // CTS cw period
-    void invalidateCTSCWPeriod();
-    bool isInvalidCTWCWPeriod();
-    void generateCTWCWPeriod();
-    void scheduleCTSCWTimer();
-    void cancelCTSCWTimer();
 
     // OperationalBase:
     virtual void handleStartOperation(LifecycleOperation *operation) override
@@ -179,43 +148,24 @@ protected:
      */
     //@{
     virtual void sendDataFrame();
-    void retransmitPacket(FragmentedPacket fragmentedPacket);
-    void announceNodeId(int respond);
-    void sendCTS();
-    void sendRTS();
 
     /**
      * @name Utility functions
      */
     virtual void finishCurrentTransmission();
     virtual Packet* getCurrentTransmission();
-    virtual Packet* encapsulate(Packet *msg);
-    virtual Packet* decapsulate(Packet *frame);
-    double predictOngoingMsgTime(int packetBytes);
 
-    virtual bool isMediumFree();
     virtual bool isReceiving();
 
     void turnOnReceiver(void);
     void turnOffReceiver(void);
-    void turnOnTransmitter();
 
+    void senderWaitDelay(int waitTime);
+    void announceNodeId(int respond);
     void createBroadcastPacket(int payloadSize, int missionId, int source, bool retransmit);
-    Packet* createHeader(int missionId, int source, int payloadSize, bool retransmit);
-    Packet* createContinuousHeader(int messageId, int payloadSize, bool retransmit);
-
-    bool isOurCTS(cMessage *msg);
-    bool isCTSForSameRTSSource(cMessage *msg);
-    bool isPacketFromRTSSource(cMessage *msg);
-    bool isInvalidCTSCWPeriod();
-    bool isFreeToSend();
-    bool withRTS();
-    void clearRTSsource();
-    void generateCTSCWPeriod();
-    void setRTSsource(int rtsSourceId);
-//    bool currentlyReceivingOurCTS();
+    void retransmitPacket(FragmentedPacket fragmentedPacket);
 };
 
-} // namespace rlora
+} // namespace inet
 
-#endif /* LORAMESHROUTERRTSCTS_LORAMESHROUTERRTSCTS_H_ */
+#endif /* LORACADALOHA_LORACADALOHA_H_ */

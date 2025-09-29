@@ -134,4 +134,71 @@ Result IncompletePacketList::addToIncompletePacket(const BroadcastFragment *pack
     return result;
 }
 
+void IncompletePacketList::updateMessageId(int sourceId, int newMessageId)
+{
+    auto it = latestMessageIds_.find(sourceId);
+    if (it == latestMessageIds_.end() || newMessageId > it->second) {
+        latestMessageIds_[sourceId] = newMessageId;
+    }
+}
+
+void IncompletePacketList::updateMissionId(int sourceId, int newMissionId)
+{
+    auto it = latestMissionIds_.find(sourceId);
+    if (it == latestMissionIds_.end() || newMissionId > it->second) {
+        latestMissionIds_[sourceId] = newMissionId;
+    }
+}
+
+bool IncompletePacketList::isNewMissionIdLower(int sourceId, int newMissionId) const
+{
+    auto it = latestMissionIds_.find(nodeId);
+    if (it == latestMissionIds_.end()) {
+        return false; // No messageId yet, so it's considered "larger"
+    }
+    return newMissionId < it->second;
+
+}
+bool IncompletePacketList::isNewMissionIdSame(int sourceId, int newMissionId) const
+{
+    auto it = latestMissionIds_.find(nodeId);
+    if (it == latestMissionIds_.end()) {
+        return false; // No messageId yet, so it's considered "larger"
+    }
+    return newMissionId == it->second;
+}
+bool IncompletePacketList::isNewMissionIdHigher(int sourceId, int newMissionId) const
+{
+    auto it = latestMissionIds_.find(nodeId);
+    if (it == latestMissionIds_.end()) {
+        return true; // No messageId yet, so it's considered "larger"
+    }
+    return newMissionId > it->second;
+}
+
+bool IncompletePacketList::isNewMessageIdLower(int sourceId, int newMessageId) const
+{
+    auto it = latestMessageIds_.find(nodeId);
+    if (it == latestMessageIds_.end()) {
+        return false; // No messageId yet, so it's considered "larger"
+    }
+    return newMessageId < it->second;
+}
+bool IncompletePacketList::isNewMessageIdSame(int sourceId, int newMessageId) const
+{
+    auto it = latestMessageIds_.find(nodeId);
+    if (it == latestMessageIds_.end()) {
+        return false; // No messageId yet, so it's considered "larger"
+    }
+    return newMessageId == it->second;
+}
+bool IncompletePacketList::isNewMessageIdHigher(int sourceId, int newMessageId) const
+{
+    auto it = latestMessageIds_.find(nodeId);
+    if (it == latestMessageIds_.end()) {
+        return true; // No messageId yet, so it's considered "larger"
+    }
+    return newMessageId > it->second;
+}
+
 } // namespace rlora
