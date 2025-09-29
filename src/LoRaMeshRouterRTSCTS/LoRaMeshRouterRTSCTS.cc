@@ -354,10 +354,17 @@ void LoRaMeshRouterRTSCTS::handleWithFsm(cMessage *msg)
                 LISTENING,
                 clearRTSsource();
         );
-        FSMA_Event_Transition(transmitter-on-now-send-cts,
+        FSMA_Event_Transition(received-packet-check-whether-from-rts-source-then-handle,
                 isPacketFromRTSSource(msg),
                 LISTENING,
                 handlePacket(pkt);
+                cancelEvent(transmissionStartTimeout);
+        );
+        // if we dont do this, we will be stuck here if a node get a message from a node other than the one from rts. should rarely happen
+        FSMA_Event_Transition(got-some-random-message-just-remove-then-go-back-to-listening,
+                isLowerMessage(msg),
+                LISTENING,
+                delete msg;
                 cancelEvent(transmissionStartTimeout);
         );
     }
@@ -398,23 +405,21 @@ void LoRaMeshRouterRTSCTS::handlePacket(Packet *packet)
     auto chunk = messageFrame->peekAtFront<inet::Chunk>();
 
     if (auto msg = dynamic_cast<const BroadcastHeader*>(chunk.get())) {
-        EV << "Received BroadcastHeader" << endl;
-
         int messageId = msg->getMessageId();
         int source = msg->getSource();
         int missionId = msg->getMissionId();
         bool isMissionMsg = msg->getRetransmit();
 
-        if (incompletePacketList.getById(messageId) != nullptr) {
-            // Paket schon erhalten. Vorbeugen von Duplikaten. Sollte nicht passieren eigentlich
+        // we only care about this message if it is a newer Neighbor Message. If it is an older one then we do not care
+        if (!isMissionMsg && !incompleteNeighbourPktList.isNewIdHigher(source, messageId)) {
             delete packet;
             return;
         }
 
-        if (!latestMissionIdFromSourceMap.isNewMissionIdLarger(source, missionId)) {
-            // Mission schon erhalten
-            EV << "Cannot get message" << endl;
-
+        // we only care about this message if it is a newer Mission Message. If it is an older one then we do not care.
+        // For continuous Header we care, because we are able to get fragments in different sequence and we only want
+        // to get the ones which we still not have gotten
+        if (isMissionMsg && !incompleteMissionPktList.isNewIdHigher(source, messageId)) {
             delete packet;
             return;
         }
@@ -425,53 +430,61 @@ void LoRaMeshRouterRTSCTS::handlePacket(Packet *packet)
         incompletePacket.sourceNode = source;
         incompletePacket.size = msg->getSize();
         incompletePacket.lastHop = msg->getHop();
-        incompletePacket.lastFragment = 0;
         incompletePacket.received = 0;
         incompletePacket.corrupted = false;
         incompletePacket.retransmit = msg->getRetransmit();
 
-        incompletePacketList.add(incompletePacket);
-
         if (isMissionMsg) {
-            // TODO: where goes this
-            latestMissionIdFromSourceMap.updateMissionId(source, missionId);
-            EV << "Adding" << endl;
+            incompleteMissionPktList.addPacket(incompletePacket);
+            incompleteMissionPktList.updatePacketId(source, missionId);
+        }
+        else {
+            incompleteNeighbourPktList.addPacket(incompletePacket);
+            incompleteNeighbourPktList.updatePacketId(source, messageId);
         }
 
+        int sizeOfFragment = msg->getSize() > 255 - BROADCAST_FRAGMENT_META_SIZE ? 255 : msg->getSize() + BROADCAST_FRAGMENT_META_SIZE;
         scheduleAfter(0, initiateCTS);
-        size_CTSData = msg->getSize();
-        source_CTSData = msg->getHop();
+        sizeOfFragment_CTSData = sizeOfFragment;
+        sourceOfRTS_CTSData = msg->getHop();
         setRTSsource(msg->getHop());
     }
     else if (auto msg = dynamic_cast<const BroadcastContinuousHeader*>(chunk.get())) {
-        EV << "Received BroadcastContinuousHeader" << endl;
-        // We can only have gotten this if we are not receiving anything else soon. Otherwise we would have sent CTS and the node would have gotten it
+        // We can only have gotten this BroadcastContinuousHeader if we are not receiving anything else soon.
+        // Otherwise we would have sent CTS and the node would have gotten it
 
-        // The messageIds are only the same from the same sender. So if we got BroadcastContinuousHeader and the messageId is not
-        // there then we have not gotten the BroadcastHeader which starts the actual beginning of incomplete packet
-        if (incompletePacketList.isFromSameHop(msg->getMessageId())) {
+        int messageId = msg->getMessageId();
+        int source = msg->getSource();
+        int missionId = msg->getMissionId();
+
+        // TODO: need to check if we have already gotten this fragment for that message. It can be from a different hop: again, we can get
+        // fragments from different nodes and not in order
+        if (incompleteMissionPktList.isNewIdSame(source, missionId) || incompleteMissionPktList.isNewIdSame(source, messageId)) {
             scheduleAfter(0, initiateCTS);
-            size_CTSData = msg->getSize();
-            source_CTSData = msg->getHopId();
+            sizeOfFragment_CTSData = msg->getPayloadSizeOfNextFragment(); // TODO
+            sourceOfRTS_CTSData = msg->getHopId();
             setRTSsource(msg->getHopId());
         }
     }
     else if (auto msg = dynamic_cast<const BroadcastFragment*>(chunk.get())) {
-        EV << "Received BroadcastFragment" << endl;
+        effectiveBytesReceivedInInterval += packet->getByteLength() - BROADCAST_FRAGMENT_META_SIZE;
 
-        // If we did not get BroadcastHeader from the node we got the Fragment from then we ignore this packet
-        Result result = incompletePacketList.addToIncompletePacket(msg);
+        int messageId = msg->getMessageId();
+        int source = msg->getSource();
+        int missionId = msg->getMissionId();
+        bool isMissionMsg = missionId > 0;
+
+        // We do check if we have started this packet with a header in the function
+        Result result;
+        if (isMissionMsg)
+            result = incompleteMissionPktList.addToIncompletePacket(msg);
+        else
+            result = incompleteNeighbourPktList.addToIncompletePacket(msg);
 
         // only count bytes if we got the Fragement from the same node from which we got the initial header
         // TODO: extremely important. We need to modify some stuff in incompletePacketList.
         // We need to keep track of the missionId of each node. When we get a header
         // When we have not finished getting the whole mission message but only the header, then we accept the mission fragment from every single node
-        if (result.isRelevant) {
-            effectiveBytesReceivedInInterval += packet->getByteLength() - BROADCAST_FRAGMENT_META_SIZE;
-        }
-        else {
-            EV << "Already got this message" << endl;
-        }
 
         if (result.isComplete) {
             if (result.sendUp) {
@@ -479,19 +492,21 @@ void LoRaMeshRouterRTSCTS::handlePacket(Packet *packet)
                 sendUp(readyMsg);
                 retransmitPacket(result.completePacket);
             }
-            incompletePacketList.removeById(msg->getMessageId());
+            if (isMissionMsg)
+                incompleteMissionPktList.removePacketById(missionId);
+            else
+                incompleteNeighbourPktList.removePacketById(messageId);
         }
     }
     else if (auto msg = dynamic_cast<const BroadcastCTS*>(chunk.get())) {
-        EV << "Received BroadcastCTS" << endl;
-        // we are only here if we did not request the CTS
+        // we are only here if we did not request the CTS. We need to wait out the message before we are able to send
         ASSERT(msg->getHopId() != nodeId);
-        int size = msg->getSize();
+        int size = msg->getSizeOfFragment();
         if (endOngoingMsg->isScheduled()) {
             cancelEvent(endOngoingMsg);
         }
         ASSERT(size > 0);
-        scheduleAfter(predictOngoingMsgTime(packet->getByteLength()) + sifs, endOngoingMsg);
+        scheduleAfter(predictOngoingMsgTime(size) + sifs, endOngoingMsg);
     }
     delete packet;
 }
@@ -694,7 +709,7 @@ void LoRaMeshRouterRTSCTS::handleCTSTimeout()
     }
     else {
         EV << "CurrentTxFrame is continuous header: " << packetQueue.toString() << endl;
-        currentTxFrame = createContinuousHeader(frag->getMissionId(), infoTag->getPayloadSize(), !infoTag->isNeighbourMsg());
+        currentTxFrame = createContinuousHeader(frag->getMissionId(), frag->getSource(), infoTag->getPayloadSize(), !infoTag->isNeighbourMsg());
     }
     EV << "END handleCTSTimeout" << endl;
 }
@@ -759,13 +774,13 @@ bool LoRaMeshRouterRTSCTS::isCTSForSameRTSSource(cMessage *msg)
 void LoRaMeshRouterRTSCTS::sendRTS()
 {
     EV << "sendRTS" << endl;
-    auto frameToSend = getCurrentTransmission();
-    auto typeTag = frameToSend->getTag<MessageInfoTag>();
+    auto rts = getCurrentTransmission();
+    auto typeTag = rts->getTag<MessageInfoTag>();
     ASSERT(typeTag->isHeader());
 
-    scheduleAfter(ctsFS * cwCTS + sifs + predictOngoingMsgTime(frameToSend->getByteLength()), CTSWaitTimeout);
-    sendDown(frameToSend->dup());
-    delete frameToSend;
+    scheduleAfter(ctsFS * cwCTS + sifs + predictOngoingMsgTime(rts->getByteLength()), CTSWaitTimeout);
+    sendDown(rts->dup());
+    delete rts;
 
     ASSERT(!packetQueue.isEmpty());
     currentTxFrame = packetQueue.dequeuePacket();
@@ -777,11 +792,11 @@ void LoRaMeshRouterRTSCTS::sendCTS()
     auto ctsPacket = new Packet("BroadcastCTS");
     auto ctsPayload = makeShared<BroadcastCTS>();
 
-    ASSERT(size_CTSData > 0);
+    ASSERT(sizeOfFragment_CTSData > 0);
     ASSERT(source_CTSData > 0);
     ctsPayload->setChunkLength(B(BROADCAST_CTS));
-    ctsPayload->setSize(size_CTSData);
-    ctsPayload->setHopId(source_CTSData);
+    ctsPayload->setSizeOfFragment(sizeOfFragment_CTSData);
+    ctsPayload->setHopId(sourceOfRTS_CTSData);
 
     ctsPacket->insertAtBack(ctsPayload);
     ctsPacket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
@@ -792,8 +807,8 @@ void LoRaMeshRouterRTSCTS::sendCTS()
 
     // After we send CTS, we need to receive message within ctsFS + sifs otherwise we assume there will be no message
     scheduleAfter(ctsFS + sifs, transmissionStartTimeout);
-    size_CTSData = -1;
-    source_CTSData = -1;
+    sizeOfFragment_CTSData = -1;
+    sourceOfRTS_CTSData = -1;
 }
 
 void LoRaMeshRouterRTSCTS::clearRTSsource()
@@ -865,7 +880,7 @@ void LoRaMeshRouterRTSCTS::createBroadcastPacket(int payloadSize, int missionId,
     while (payloadSize > 0) {
 
         if (i > 0) {
-            Packet *continuousHeader = createContinuousHeader(missionId, payloadSize, retransmit);
+            Packet *continuousHeader = createContinuousHeader(missionId, source, payloadSize, retransmit);
             packetQueue.enqueuePacket(continuousHeader);
         }
 
@@ -889,7 +904,7 @@ void LoRaMeshRouterRTSCTS::createBroadcastPacket(int payloadSize, int missionId,
         fragmentPayload->setMissionId(missionId);
         fragmentPayload->setMessageId(messageId);
         fragmentPayload->setSource(source);
-        fragmentPayload->setFragment(i++);
+        fragmentPayload->setFragmentId(i++);
         fragmentPacket->insertAtBack(fragmentPayload);
         fragmentPacket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
 
@@ -941,7 +956,7 @@ Packet* LoRaMeshRouterRTSCTS::createHeader(int missionId, int source, int payloa
     return headerPaket;
 }
 
-Packet* LoRaMeshRouterRTSCTS::createContinuousHeader(int missionId, int payloadSize, bool retransmit)
+Packet* LoRaMeshRouterRTSCTS::createContinuousHeader(int missionId, int source, int payloadSize, bool retransmit)
 {
     EV << "createContinuousHeader" << endl;
     Packet *headerPaket = new Packet("BroadcastContinuousHeader");
@@ -952,9 +967,11 @@ Packet* LoRaMeshRouterRTSCTS::createContinuousHeader(int missionId, int payloadS
 
     auto headerPayload = makeShared<BroadcastContinuousHeader>();
     headerPayload->setChunkLength(B(BROADCAST_CONTINIOUS_HEADER));
-    headerPayload->setSize(payloadSize);
+    headerPayload->setPayloadSizeOfNextFragment(payloadSize + BROADCAST_FRAGMENT_META_SIZE);
     headerPayload->setHopId(nodeId);
+    headerPayload->setSource(source);
     headerPayload->setMessageId(headerPaket->getId());
+    headerPayload->setMissionId(missionId);
     headerPaket->insertAtBack(headerPayload);
     headerPaket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
 

@@ -22,8 +22,6 @@
 
 #include "../helpers/CustomPacketQueue.h"
 #include "../helpers/IncompletePacketList.h"
-#include "../helpers/LatestMessageIdMap.h"
-#include "../helpers/LatestMissionIdFromSourceMap.h"
 
 namespace rlora {
 
@@ -32,14 +30,12 @@ using namespace inet;
 class LoRaCSMA : public MacProtocolBase, public IMacProtocol, public queueing::IActivePacketSink
 {
 protected:
-    LatestMissionIdFromSourceMap latestMissionIdFromSourceMap;
-
     IRadio *radio = nullptr;
     LoRaRadio *loRaRadio;
     MacAddress address;
-    IncompletePacketList incompletePacketList;
+    IncompletePacketList incompleteMissionPktList;
+    IncompletePacketList incompleteNeighbourPktList;
     CustomPacketQueue packetQueue;
-    LatestMessageIdMap latestMessageIdMap;
 
     cMessage *nodeAnnounce = nullptr;
     cMessage *transmitSwitchDone = nullptr;

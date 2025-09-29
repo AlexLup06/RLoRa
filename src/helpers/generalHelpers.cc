@@ -14,6 +14,8 @@
 // 
 
 #include "generalHelpers.h"
+#include <functional>
+#include <iostream>
 
 namespace rlora {
 
@@ -23,6 +25,11 @@ int predictSendTime(int size)
         return 255 + 20;
     }
     return size + 20;
+}
+
+bool isMissionMessage(int missionId)
+{
+    return missionId >= 0;
 }
 
 string generate_uuid()

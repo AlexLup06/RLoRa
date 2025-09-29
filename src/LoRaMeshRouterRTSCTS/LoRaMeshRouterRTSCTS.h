@@ -32,8 +32,6 @@
 
 #include "../helpers/CustomPacketQueue.h"
 #include "../helpers/IncompletePacketList.h"
-#include "../helpers/LatestMessageIdMap.h"
-#include "../helpers/LatestMissionIdFromSourceMap.h"
 
 using namespace inet;
 using namespace physicallayer;
@@ -80,8 +78,8 @@ protected:
 
     long bytesReceivedInInterval = 0;
     long effectiveBytesReceivedInInterval = 0;
-    int size_CTSData = -1;
-    int source_CTSData = -1;
+    int sizeOfFragment_CTSData = -1;
+    int sourceOfRTS_CTSData = -1;
     int rtsSource = -1;
     int nodeId = -1;
 
@@ -101,12 +99,11 @@ protected:
     cMessage *ctsCWTimeout = nullptr;
     cMessage *moreMessagesToSend = nullptr;
 
-    IncompletePacketList incompletePacketList;
+    IncompletePacketList incompleteMissionPktList;
+    IncompletePacketList incompleteNeighbourPktList;
     CustomPacketQueue packetQueue;
     LoRaRadio *loRaRadio;
-    LatestMissionIdFromSourceMap latestMissionIdFromSourceMap;
     map<int, SimTime> idToAddedTimeMap;
-
 
 public:
     /**
@@ -202,7 +199,7 @@ protected:
 
     void createBroadcastPacket(int payloadSize, int missionId, int source, bool retransmit);
     Packet* createHeader(int missionId, int source, int payloadSize, bool retransmit);
-    Packet* createContinuousHeader(int messageId, int payloadSize, bool retransmit);
+    Packet* createContinuousHeader(int messageId, int source, int payloadSize, bool retransmit);
 
     bool isOurCTS(cMessage *msg);
     bool isCTSForSameRTSSource(cMessage *msg);

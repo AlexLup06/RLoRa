@@ -17,6 +17,8 @@
 #define HELPERS_GENERALHELPERS_H_
 
 #include <random>
+#include <functional>
+#include <iostream>
 #include <sstream>
 
 namespace rlora {

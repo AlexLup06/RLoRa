@@ -20,7 +20,8 @@
 
 namespace rlora {
 
-IncompletePacketList::IncompletePacketList()
+IncompletePacketList::IncompletePacketList(bool isMissionList) :
+        isMissionList_(isMissionList)
 {
 }
 
@@ -28,32 +29,34 @@ IncompletePacketList::~IncompletePacketList()
 {
 }
 
-void IncompletePacketList::add(const FragmentedPacket &packet)
-{
-    // falls wir eine neue Nachricht von einem Knoten bekommen und die alte
-    // Nachricht nicht vollständig empfangen wurde, dann wurde das letzte Fragment verloren
-    removeBySource(packet.sourceNode);
-    packets_.push_back(packet);
-}
-
-FragmentedPacket* IncompletePacketList::getById(int messageId)
+FragmentedPacket* IncompletePacketList::getPacketById(int id)
 {
     for (FragmentedPacket &packet : packets_) {
-        if (packet.messageId == messageId) {
+        if (packet.messageId == id && !isMissionList_) {
+            return &packet;
+        }
+
+        if (packet.missionId == id && isMissionList_) {
             return &packet;
         }
     }
     return nullptr;
 }
 
-void IncompletePacketList::removeById(int messageId)
+void IncompletePacketList::removePacketById(int id)
 {
-    packets_.erase(std::remove_if(packets_.begin(), packets_.end(), [messageId](const FragmentedPacket &packet) {
-        return packet.messageId == messageId;
+    packets_.erase(std::remove_if(packets_.begin(), packets_.end(), [id](const FragmentedPacket &packet) {
+        return packet.messageId == id;
     }), packets_.end());
 }
 
-void IncompletePacketList::removeBySource(int source)
+void IncompletePacketList::addPacket(const FragmentedPacket &packet)
+{
+    removePacketBySource(packet.sourceNode);
+    packets_.push_back(packet);
+}
+
+void IncompletePacketList::removePacketBySource(int source)
 {
     auto it = std::remove_if(packets_.begin(), packets_.end(), [source](const FragmentedPacket &packet) {
         return packet.sourceNode == source;
@@ -63,19 +66,16 @@ void IncompletePacketList::removeBySource(int source)
     }
 }
 
-// The messageIds are only the same from the same sender
-bool IncompletePacketList::isFromSameHop(int messageId)
-{
-    FragmentedPacket *incompletePacket = getById(messageId);
-    if (incompletePacket == nullptr) {
-        return false;
-    }
-    return true;
-}
-
+/*
+ * We can get fragments in different sequence
+ */
 Result IncompletePacketList::addToIncompletePacket(const BroadcastFragment *packet)
 {
-    FragmentedPacket *incompletePacket = getById(packet->getMessageId());
+    FragmentedPacket *incompletePacket;
+    if (isMissionList_)
+        incompletePacket = getPacketById(packet->getMissionId());
+    else
+        incompletePacket = getPacketById(packet->getMessageId());
 
     Result result;
     if (incompletePacket == nullptr) {
@@ -86,21 +86,12 @@ Result IncompletePacketList::addToIncompletePacket(const BroadcastFragment *pack
         return result;
     }
 
-    if (packet->getFragment() <= incompletePacket->lastFragment && packet->getFragment() > 0) {
+    int fragmentId = packet->getFragmentId();
+    if (incompletePacket->fragments[fragmentId]) { // we already got this fragment
         result.isComplete = false;
         result.sendUp = false;
         result.waitTime = -1;
         return result;
-    }
-
-    if (packet->getFragment() - incompletePacket->lastFragment > 1) {
-        // We lost a Packet! Doesn't matter, fill out bytes and continue
-
-        int lostFragments = packet->getFragment() - incompletePacket->lastFragment - 1;
-
-        incompletePacket->received += (255 - BROADCAST_FRAGMENT_META_SIZE) * lostFragments;
-        incompletePacket->lastFragment += lostFragments;
-        incompletePacket->corrupted = true;
     }
 
     int totalBytesReceived = incompletePacket->received + packet->getPayloadSize();
@@ -108,10 +99,9 @@ Result IncompletePacketList::addToIncompletePacket(const BroadcastFragment *pack
     int waitTime = 20 + predictSendTime(bytesLeft > 255 ? 255 : bytesLeft);
 
     incompletePacket->received = totalBytesReceived;
-    incompletePacket->lastFragment = packet->getFragment();
+    incompletePacket->fragments[fragmentId] = true;
 
     if (incompletePacket->received == incompletePacket->size) {
-
         if (!incompletePacket->corrupted) {
             result.isComplete = true;
             result.sendUp = true;
@@ -125,7 +115,6 @@ Result IncompletePacketList::addToIncompletePacket(const BroadcastFragment *pack
             result.sendUp = false;
             result.waitTime = waitTime;
             return result;
-
         }
     }
     result.isComplete = false;
@@ -134,71 +123,41 @@ Result IncompletePacketList::addToIncompletePacket(const BroadcastFragment *pack
     return result;
 }
 
-void IncompletePacketList::updateMessageId(int sourceId, int newMessageId)
+void IncompletePacketList::updatePacketId(int sourceId, int newId)
 {
-    auto it = latestMessageIds_.find(sourceId);
-    if (it == latestMessageIds_.end() || newMessageId > it->second) {
-        latestMessageIds_[sourceId] = newMessageId;
+    if (newId < 0)
+        return;
+    auto it = latestIds_.find(sourceId);
+    if (it == latestIds_.end() || newId > it->second) {
+        latestIds_[sourceId] = newId;
     }
 }
 
-void IncompletePacketList::updateMissionId(int sourceId, int newMissionId)
+bool IncompletePacketList::isNewIdLower(int sourceId, int newId) const
 {
-    auto it = latestMissionIds_.find(sourceId);
-    if (it == latestMissionIds_.end() || newMissionId > it->second) {
-        latestMissionIds_[sourceId] = newMissionId;
-    }
-}
-
-bool IncompletePacketList::isNewMissionIdLower(int sourceId, int newMissionId) const
-{
-    auto it = latestMissionIds_.find(nodeId);
-    if (it == latestMissionIds_.end()) {
+    auto it = latestIds_.find(sourceId);
+    if (it == latestIds_.end()) {
         return false; // No messageId yet, so it's considered "larger"
     }
-    return newMissionId < it->second;
-
+    return newId > it->second;
 }
-bool IncompletePacketList::isNewMissionIdSame(int sourceId, int newMissionId) const
+
+bool IncompletePacketList::isNewIdSame(int sourceId, int newId) const
 {
-    auto it = latestMissionIds_.find(nodeId);
-    if (it == latestMissionIds_.end()) {
+    auto it = latestIds_.find(sourceId);
+    if (it == latestIds_.end()) {
         return false; // No messageId yet, so it's considered "larger"
     }
-    return newMissionId == it->second;
+    return newId > it->second;
 }
-bool IncompletePacketList::isNewMissionIdHigher(int sourceId, int newMissionId) const
+
+bool IncompletePacketList::isNewIdHigher(int sourceId, int newId) const
 {
-    auto it = latestMissionIds_.find(nodeId);
-    if (it == latestMissionIds_.end()) {
+    auto it = latestIds_.find(sourceId);
+    if (it == latestIds_.end()) {
         return true; // No messageId yet, so it's considered "larger"
     }
-    return newMissionId > it->second;
-}
-
-bool IncompletePacketList::isNewMessageIdLower(int sourceId, int newMessageId) const
-{
-    auto it = latestMessageIds_.find(nodeId);
-    if (it == latestMessageIds_.end()) {
-        return false; // No messageId yet, so it's considered "larger"
-    }
-    return newMessageId < it->second;
-}
-bool IncompletePacketList::isNewMessageIdSame(int sourceId, int newMessageId) const
-{
-    auto it = latestMessageIds_.find(nodeId);
-    if (it == latestMessageIds_.end()) {
-        return false; // No messageId yet, so it's considered "larger"
-    }
-    return newMessageId == it->second;
-}
-bool IncompletePacketList::isNewMessageIdHigher(int sourceId, int newMessageId) const
-{
-    auto it = latestMessageIds_.find(nodeId);
-    if (it == latestMessageIds_.end()) {
-        return true; // No messageId yet, so it's considered "larger"
-    }
-    return newMessageId > it->second;
+    return newId > it->second;
 }
 
 } // namespace rlora

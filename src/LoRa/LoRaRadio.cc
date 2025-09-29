@@ -27,7 +27,7 @@
 #include "../LoRaPhy/LoRaReceiver.h"
 #include "../LoRaPhy/LoRaPhyPreamble_m.h"
 #include "../helpers/DataLogger.h"
-#include "../helpers/MessageInfoTag_m.h"
+#include "../messages/MessageInfoTag_m.h"
 
 namespace rlora {
 

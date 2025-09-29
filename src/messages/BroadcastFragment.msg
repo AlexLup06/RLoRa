@@ -22,7 +22,7 @@ namespace rlora;
 //
 class BroadcastFragment extends inet::FieldsChunk {
     int messageId;
-    int fragment;
+    int fragmentId;
     int source;
 	int payloadSize;
 	int missionId;

@@ -21,6 +21,6 @@ namespace rlora;
 // TODO generated message class
 //
 class BroadcastCTS extends inet::FieldsChunk {
-    int size;
+    int sizeOfFragment;
     int hopId;
 }

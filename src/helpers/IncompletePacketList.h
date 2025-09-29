@@ -24,6 +24,7 @@
 
 #include "../messages/BroadcastFragment_m.h"
 #include "generalHelpers.h"
+#include <unordered_map>
 
 namespace rlora {
 
@@ -37,19 +38,12 @@ struct FragmentedPacket
     int missionId = -1;
     int size = -1;
     int received = 0;
-    int lastFragment = 0;
+    bool fragments[256] = { false };
     int sourceNode = -1;
     int lastHop = -1;
     bool corrupted = false;
     bool retransmit = false;
 
-    std::string toString() const
-    {
-        std::ostringstream oss;
-        oss << "FragmentedPacket { " << "id: " << id << ", messageId: " << messageId << ", size: " << size << ", received: " << received << ", lastFragment: " << lastFragment << ", sourceNode: " << sourceNode << ", lastHop: " << lastHop << ", corrupted: " << std::boolalpha << corrupted
-                << ", retransmit: " << std::boolalpha << retransmit << " }";
-        return oss.str();
-    }
 };
 
 struct Result
@@ -65,36 +59,58 @@ struct Result
 class IncompletePacketList
 {
 public:
-    IncompletePacketList();
+    IncompletePacketList(bool isMissionList = false);
     virtual ~IncompletePacketList();
 
-    FragmentedPacket* getById(int messageId);
-
-    void removeById(int messageId);
-    void add(const FragmentedPacket &packet);
-    void removeBySource(int source);
-    bool isFromSameHop(int messageId);
+    FragmentedPacket* getPacketById(int id);
+    void removePacketById(int id);
+    void addPacket(const FragmentedPacket &packet);
+    void removePacketBySource(int source);
     Result addToIncompletePacket(const BroadcastFragment *fragment);
 
-    void updateMessageId(int sourceId, int newMessageId);
-    void updateMissionId(int sourceId, int newMissionId);
-
-    bool isNewMissionIdLower(int sourceId, int newMissionId) const;
-    bool isNewMissionIdSame(int sourceId, int newMissionId) const;
-    bool isNewMissionIdHigher(int sourceId, int newMissionId) const;
-
-    bool isNewMessageIdLower(int sourceId, int newMessageId) const;
-    bool isNewMessageIdSame(int sourceId, int newMessageId) const;
-    bool isNewMessageIdHigher(int sourceId, int newMessageId) const;
+    void updatePacketId(int sourceId, int newId);
+    bool isNewIdLower(int sourceId, int newId) const;
+    bool isNewIdSame(int sourceId, int newId) const;
+    bool isNewIdHigher(int sourceId, int newId) const;
 
 private:
     std::vector<FragmentedPacket> packets_;
-    std::unordered_map<int, int> latestMessageIds_;
-    std::unordered_map<int, int> latestMissionIds_;
+    std::unordered_map<int, int> latestIds_;
+    bool isMissionList_;
 
 };
 
 } // namespace rlora
 
 #endif // HELPERS_INCOMPLETEPACKETLIST_H_
+
+//    std::vector<FragmentedPacket> missionPkts_;
+//    std::vector<FragmentedPacket> neighbourPkts_;
+//    std::unordered_map<int, int> latestMessageIds_;
+//    std::unordered_map<int, int> latestMissionIds_;
+
+//    FragmentedPacket* getByMissionPktId(int missionId);
+//    void removeMissionPktById(int missionId);
+//    void addMissionPkt(const FragmentedPacket &packet);
+//    void removeMissionPktBySource(int source);
+//    bool isMissionPktFromSameHop(int missionId);
+//    Result addToIncompleteMissionPkt(const BroadcastFragment *fragment);
+//
+//    FragmentedPacket* getByNeighboutPktId(int messageId);
+//    void removeNeighbourPktById(int messageId);
+//    void addNeighbourPkt(const FragmentedPacket &packet);
+//    void removeNeighbourPktBySource(int source);
+//    bool isNeighbourPktFromSameHop(int messageId);
+//    Result addToIncompleteNeighbourPkt(const BroadcastFragment *fragment);
+//
+//    void updateMessageId(int sourceId, int newMessageId);
+//    void updateMissionId(int sourceId, int newMissionId);
+//
+//    bool isNewMissionIdLower(int sourceId, int newMissionId) const;
+//    bool isNewMissionIdSame(int sourceId, int newMissionId) const;
+//    bool isNewMissionIdHigher(int sourceId, int newMissionId) const;
+//
+//    bool isNewMessageIdLower(int sourceId, int newMessageId) const;
+//    bool isNewMessageIdSame(int sourceId, int newMessageId) const;
+//    bool isNewMessageIdHigher(int sourceId, int newMessageId) const;
 

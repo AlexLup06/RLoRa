@@ -28,7 +28,9 @@ namespace rlora;
 //
 class BroadcastContinuousHeader extends inet::FieldsChunk {
     int messageId;
-    int size;
+    int payloadSizeOfNextFragment;
+    int missionId;
+    int source;
     int hopId;
 }
 

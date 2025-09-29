@@ -6,7 +6,7 @@
  */
 
 #include "CustomPacketQueue.h"
-#include "MessageInfoTag_m.h"
+#include "../messages/MessageInfoTag_m.h"
 
 namespace rlora {
 

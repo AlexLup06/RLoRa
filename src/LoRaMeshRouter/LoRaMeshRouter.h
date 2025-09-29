@@ -17,8 +17,6 @@
 
 #include "../helpers/CustomPacketQueue.h"
 #include "../helpers/IncompletePacketList.h"
-#include "../helpers/LatestMessageIdMap.h"
-#include "../helpers/LatestMissionIdFromSourceMap.h"
 
 using namespace inet;
 using namespace physicallayer;
@@ -38,7 +36,7 @@ protected:
 
     enum State
     {
-        SWITCHING,TRANSMITING, LISTENING, RECEIVING
+        SWITCHING, TRANSMITING, LISTENING, RECEIVING
     };
 
     IRadio *radio = nullptr;
@@ -68,12 +66,10 @@ protected:
     cMessage *receptionStated = nullptr;
 
     int nodeId = -1;
-    IncompletePacketList incompletePacketList;
+    IncompletePacketList incompleteMissionPktList;
+    IncompletePacketList incompleteNeighbourPktList;
     CustomPacketQueue packetQueue;
-    LatestMessageIdMap latestMessageIdMap;
     LoRaRadio *loRaRadio;
-    LatestMissionIdFromSourceMap latestMissionIdFromSourceMap;
-
 
 //    Packet *currentNodeAnnounceFrame = nullptr;
 public:

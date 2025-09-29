@@ -29,9 +29,9 @@
 #include "../LoRa/LoRaTagInfo_m.h"
 #include "../LoRaApp/LoRaRobotPacket_m.h"
 #include "../helpers/generalHelpers.h"
-#include "../helpers/MessageInfoTag_m.h"
 #include "WaitTimeTag_m.h"
 
+#include "../messages/MessageInfoTag_m.h"
 #include "../messages/BroadcastCTS_m.h"
 #include "../messages/BroadcastFragment_m.h"
 #include "../messages/BroadcastHeader_m.h"
@@ -328,28 +328,17 @@ void LoRaMeshRouter::handlePacket(Packet *packet)
 
     }
     else if (auto msg = dynamic_cast<const BroadcastHeader*>(chunk.get())) {
-        EV << "Received BroadcastHeader" << endl;
-
         int messageId = msg->getMessageId();
         int source = msg->getSource();
         int missionId = msg->getMissionId();
         bool isMissionMsg = msg->getRetransmit();
 
-        if (incompletePacketList.getById(messageId) != nullptr) {
-            // Paket schon erhalten. Vorbeugen von Duplikaten. Sollte nicht passieren eigentlich
+        if (!isMissionMsg && !incompleteNeighbourPktList.isNewIdHigher(source, messageId)) {
             delete packet;
             return;
         }
 
-        // TODO: do we really need that?
-        if (!latestMessageIdMap.isNewMessageIdLarger(source, messageId)) {
-            // packet schon erhalten. Wir gerade von einem anderen Knoten nochmal wiederholt
-            delete packet;
-            return;
-        }
-
-        if (!latestMissionIdFromSourceMap.isNewMissionIdLarger(source, missionId)) {
-            // Mission schon erhalten
+        if (isMissionMsg && !incompleteMissionPktList.isNewIdHigher(source, missionId)) {
             delete packet;
             return;
         }
@@ -360,26 +349,34 @@ void LoRaMeshRouter::handlePacket(Packet *packet)
         incompletePacket.sourceNode = source;
         incompletePacket.size = msg->getSize();
         incompletePacket.lastHop = msg->getHop();
-        incompletePacket.lastFragment = 0;
         incompletePacket.received = 0;
         incompletePacket.corrupted = false;
         incompletePacket.retransmit = msg->getRetransmit();
 
-        incompletePacketList.add(incompletePacket);
-        latestMessageIdMap.updateMessageId(source, messageId);
-
-        // TODO: where goes this
         if (isMissionMsg) {
-            latestMissionIdFromSourceMap.updateMissionId(source, missionId);
+            incompleteMissionPktList.addPacket(incompletePacket);
+            incompleteMissionPktList.updatePacketId(source, missionId);
         }
-
+        else {
+            incompleteNeighbourPktList.addPacket(incompletePacket);
+            incompleteNeighbourPktList.updatePacketId(source, messageId);
+        }
         int size = msg->getSize();
         int waitTime = 20 + predictSendTime(size);
         senderWaitDelay(waitTime);
     }
     else if (auto msg = dynamic_cast<const BroadcastFragment*>(chunk.get())) {
-        EV << "Received BroadcastFragment" << endl;
-        Result result = incompletePacketList.addToIncompletePacket(msg);
+        int messageId = msg->getMessageId();
+        int source = msg->getSource();
+        int missionId = msg->getMissionId();
+        bool isMissionMsg = missionId > 0;
+
+        // We do check if we have started this packet with a header in the function
+        Result result;
+        if (isMissionMsg)
+            result = incompleteMissionPktList.addToIncompletePacket(msg);
+        else
+            result = incompleteNeighbourPktList.addToIncompletePacket(msg);
 
         effectiveBytesReceivedInInterval += packet->getByteLength() - BROADCAST_FRAGMENT_META_SIZE;
 
@@ -393,7 +390,10 @@ void LoRaMeshRouter::handlePacket(Packet *packet)
                 sendUp(readyMsg);
                 retransmitPacket(result.completePacket);
             }
-            incompletePacketList.removeById(msg->getMessageId());
+            if (isMissionMsg)
+                incompleteMissionPktList.removePacketById(missionId);
+            else
+                incompleteNeighbourPktList.removePacketById(messageId);
         }
     }
     delete packet;
@@ -587,7 +587,7 @@ void LoRaMeshRouter::createBroadcastPacket(int payloadSize, int missionId, int s
         fragmentPayload->setMissionId(missionId);
         fragmentPayload->setMessageId(messageId);
         fragmentPayload->setSource(source);
-        fragmentPayload->setFragment(i++);
+        fragmentPayload->setFragmentId(i++);
         fragmentPacket->insertAtBack(fragmentPayload);
         fragmentPacket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
 

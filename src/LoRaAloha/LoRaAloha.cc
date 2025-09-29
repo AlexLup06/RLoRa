@@ -37,6 +37,11 @@ namespace rlora {
 
 Define_Module(LoRaAloha);
 
+LoRaAloha::LoRaAloha() :
+        incompleteMissionPktList(true), incompleteNeighbourPktList(false)
+{
+}
+
 LoRaAloha::~LoRaAloha()
 {
 }
@@ -291,19 +296,7 @@ void LoRaAloha::handlePacket(Packet *packet)
     Packet *messageFrame = decapsulate(packet);
     auto chunk = messageFrame->peekAtFront<inet::Chunk>();
 
-    if (auto msg = dynamic_cast<const NodeAnnounce*>(chunk.get())) {
-        EV << "Received NodeAnnounce" << endl;
-        // einfach kopirt aus Julians implementierung
-        if (nodeId != msg->getNodeId()) {
-
-            if (msg->getRespond() == 1) {
-                // Unknown node! Block Sending for a time window, to allow other Nodes to respond.
-                announceNodeId(0);
-            }
-        }
-
-    }
-    else if (auto msg = dynamic_cast<const BroadcastLeaderFragment*>(chunk.get())) {
+    if (auto msg = dynamic_cast<const BroadcastLeaderFragment*>(chunk.get())) {
         effectiveBytesReceivedInInterval += packet->getByteLength() - BROADCAST_LEADER_FRAGMENT_META_SIZE;
 
         int messageId = msg->getMessageId();
@@ -311,21 +304,12 @@ void LoRaAloha::handlePacket(Packet *packet)
         int missionId = msg->getMissionId();
         bool isMissionMsg = msg->getRetransmit();
 
-        if (incompletePacketList.getById(messageId) != nullptr) {
-            // Paket schon erhalten. Vorbeugen von Duplikaten. Sollte nicht passieren eigentlich
+        if (!isMissionMsg && !incompleteNeighbourPktList.isNewIdHigher(source, messageId)) {
             delete packet;
             return;
         }
 
-        // TODO: clean up. but need to change incomplete packet list first
-        if (!latestMessageIdMap.isNewMessageIdLarger(source, messageId)) {
-            // packet schon erhalten. Wir gerade von einem anderen Knoten nochmal wiederholt
-            delete packet;
-            return;
-        }
-
-        if (!latestMissionIdFromSourceMap.isNewMissionIdLarger(source, missionId)) {
-            // Mission schon erhalten
+        if (isMissionMsg && !incompleteMissionPktList.isNewIdHigher(source, missionId)) {
             delete packet;
             return;
         }
@@ -336,17 +320,17 @@ void LoRaAloha::handlePacket(Packet *packet)
         incompletePacket.sourceNode = source;
         incompletePacket.size = msg->getSize();
         incompletePacket.lastHop = msg->getHop();
-        incompletePacket.lastFragment = 0;
         incompletePacket.received = 0;
         incompletePacket.corrupted = false;
         incompletePacket.retransmit = msg->getRetransmit();
 
-        incompletePacketList.add(incompletePacket);
-        latestMessageIdMap.updateMessageId(source, messageId);
-
-        // TODO: same as above
         if (isMissionMsg) {
-            latestMissionIdFromSourceMap.updateMissionId(source, missionId);
+            incompleteMissionPktList.addPacket(incompletePacket);
+            incompleteMissionPktList.updatePacketId(source, missionId);
+        }
+        else {
+            incompleteNeighbourPktList.addPacket(incompletePacket);
+            incompleteNeighbourPktList.updatePacketId(source, messageId);
         }
 
         // wir senden schon mit dem ersten packet daten
@@ -356,9 +340,13 @@ void LoRaAloha::handlePacket(Packet *packet)
         fragmentPayload->setMessageId(messageId);
         fragmentPayload->setMissionId(missionId);
         fragmentPayload->setSource(source);
-        fragmentPayload->setFragment(0);
+        fragmentPayload->setFragmentId(0);
 
-        Result result = incompletePacketList.addToIncompletePacket(fragmentPayload);
+        Result result;
+        if (isMissionMsg)
+            result = incompleteMissionPktList.addToIncompletePacket(fragmentPayload);
+        else
+            result = incompleteNeighbourPktList.addToIncompletePacket(fragmentPayload);
 
         if (result.isComplete) {
             if (result.sendUp) {
@@ -366,13 +354,28 @@ void LoRaAloha::handlePacket(Packet *packet)
                 sendUp(readyMsg);
                 retransmitPacket(result.completePacket);
             }
-            incompletePacketList.removeById(msg->getMessageId());
+
+            if (isMissionMsg)
+                incompleteMissionPktList.removePacketById(missionId);
+            else
+                incompleteNeighbourPktList.removePacketById(messageId);
+
         }
         delete fragmentPayload;
 
     }
     else if (auto msg = dynamic_cast<const BroadcastFragment*>(chunk.get())) {
-        Result result = incompletePacketList.addToIncompletePacket(msg);
+        int messageId = msg->getMessageId();
+        int source = msg->getSource();
+        int missionId = msg->getMissionId();
+        bool isMissionMsg = missionId > 0;
+
+        // We do check if we have started this packet with a header in the function
+        Result result;
+        if (isMissionMsg)
+            result = incompleteMissionPktList.addToIncompletePacket(msg);
+        else
+            result = incompleteNeighbourPktList.addToIncompletePacket(msg);
 
         effectiveBytesReceivedInInterval += packet->getByteLength() - BROADCAST_FRAGMENT_META_SIZE;
 
@@ -382,7 +385,10 @@ void LoRaAloha::handlePacket(Packet *packet)
                 sendUp(readyMsg);
                 retransmitPacket(result.completePacket);
             }
-            incompletePacketList.removeById(msg->getMessageId());
+            if (isMissionMsg)
+                incompleteMissionPktList.removePacketById(missionId);
+            else
+                incompleteNeighbourPktList.removePacketById(messageId);
         }
     }
     delete packet;
@@ -498,20 +504,21 @@ void LoRaAloha::retransmitPacket(FragmentedPacket fragmentedPacket)
     createBroadcastPacket(fragmentedPacket.size, fragmentedPacket.missionId, fragmentedPacket.sourceNode, fragmentedPacket.retransmit);
 }
 
-void LoRaAloha::createBroadcastPacket(int payloadSize, int missionId, int source, bool retransmit)
+void LoRaAloha::createBroadcastPacket(int payloadSize, int missionId, int source, bool isMission)
 {
     auto headerPaket = new Packet("BroadcastLeaderFragment");
     auto headerPayload = makeShared<BroadcastLeaderFragment>();
     int messageId = headerPaket->getId();
     int fullPayloadSize = payloadSize;
 
-    if (missionId == -1) {
+    if (missionId == -1 && isMission) {
         missionId = headerPaket->getId();
     }
 
     if (source == -1) {
         source = nodeId;
     }
+
     int currentPayloadSize = 0;
     if (payloadSize + BROADCAST_LEADER_FRAGMENT_META_SIZE > 255) {
         currentPayloadSize = 255 - BROADCAST_LEADER_FRAGMENT_META_SIZE;
@@ -530,12 +537,12 @@ void LoRaAloha::createBroadcastPacket(int payloadSize, int missionId, int source
     headerPayload->setMissionId(missionId);
     headerPayload->setSource(source);
     headerPayload->setHop(nodeId);
-    headerPayload->setRetransmit(retransmit);
+    headerPayload->setRetransmit(isMission);
     headerPaket->insertAtBack(headerPayload);
     headerPaket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
 
     auto messageInfoTag = headerPaket->addTagIfAbsent<MessageInfoTag>();
-    messageInfoTag->setIsNeighbourMsg(!retransmit);
+    messageInfoTag->setIsNeighbourMsg(!isMission);
     messageInfoTag->setMissionId(missionId);
     messageInfoTag->setIsHeader(true);
     messageInfoTag->setHasUsefulData(true);
@@ -570,12 +577,12 @@ void LoRaAloha::createBroadcastPacket(int payloadSize, int missionId, int source
         fragmentPayload->setMessageId(messageId);
         fragmentPayload->setMissionId(missionId);
         fragmentPayload->setSource(source);
-        fragmentPayload->setFragment(i++);
+        fragmentPayload->setFragmentId(i++);
         fragmentPacket->insertAtBack(fragmentPayload);
         fragmentPacket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
 
         auto messageInfoTag = fragmentPacket->addTagIfAbsent<MessageInfoTag>();
-        messageInfoTag->setIsNeighbourMsg(!retransmit);
+        messageInfoTag->setIsNeighbourMsg(!isMission);
         messageInfoTag->setMissionId(missionId);
         messageInfoTag->setIsHeader(false);
         messageInfoTag->setHasUsefulData(true);

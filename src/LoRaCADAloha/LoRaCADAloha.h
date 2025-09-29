@@ -32,8 +32,6 @@
 
 #include "../helpers/CustomPacketQueue.h"
 #include "../helpers/IncompletePacketList.h"
-#include "../helpers/LatestMessageIdMap.h"
-#include "../helpers/LatestMissionIdFromSourceMap.h"
 
 using namespace inet;
 using namespace physicallayer;
@@ -73,7 +71,6 @@ protected:
     simsignal_t sentMissionId;
     simsignal_t receivedMissionId;
 
-
     map<int, SimTime> idToAddedTimeMap;
 
     cMessage *mediumStateChange = nullptr;
@@ -84,12 +81,10 @@ protected:
     cMessage *receptionStated = nullptr;
 
     int nodeId = -1;
-    IncompletePacketList incompletePacketList;
+    IncompletePacketList incompleteMissionPktList;
+    IncompletePacketList incompleteNeighbourPktList;
     CustomPacketQueue packetQueue;
-    LatestMessageIdMap latestMessageIdMap;
     LoRaRadio *loRaRadio;
-    LatestMissionIdFromSourceMap latestMissionIdFromSourceMap;
-
 
 //    Packet *currentNodeAnnounceFrame = nullptr;
 public:
