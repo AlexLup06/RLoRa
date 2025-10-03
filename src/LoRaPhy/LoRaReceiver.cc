@@ -117,11 +117,8 @@ bool LoRaReceiver::isPacketCollided(const IReception *reception, IRadioSignal::S
     EV << "Signal RSSI in dBm: " << signalRSSI_dBm << endl;
     int receptionSF = loRaReception->getLoRaSF();
 
-
     bool isCollided = false;
-    EV << "Before for " << endl;
     for (auto interferingReception : *interferingReceptions) {
-        EV << "in for " << endl;
         int id1 = reception->getTransmission()->getId();
         int id2 = interferingReception->getTransmission()->getId();
 
@@ -182,6 +179,11 @@ bool LoRaReceiver::isPacketCollided(const IReception *reception, IRadioSignal::S
             receiverInstance->emit(receiverInstance->LoRaReceptionCollision, true);
             isCollided = true;
             if (messageInfoTag1->getHasUsefulData() || messageInfoTag2->getHasUsefulData()) {
+                if (messageInfoTag1->getHasUsefulData())
+                    EV << "This message has useful data: " << reception->getTransmission()->getPacket()->getName() << endl;
+                if (messageInfoTag2->getHasUsefulData())
+                    EV << "This message has useful data: " << interferingReception->getTransmission()->getPacket()->getName() << endl;
+
                 EV << "Collision: " << reception->getTransmission()->getPacket()->getName() << ", WITH, " << interferingReception->getTransmission()->getPacket()->getName() << endl;
                 DataLogger::getInstance()->logCollision(id1, id2);
             }

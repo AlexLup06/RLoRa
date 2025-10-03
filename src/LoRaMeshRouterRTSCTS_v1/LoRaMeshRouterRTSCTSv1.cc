@@ -13,7 +13,7 @@
 // along with this program.  If not, see http://www.gnu.org/licenses/.
 // 
 
-#include "LoRaMeshRouterTunedRTSCTS.h"
+#include "LoRaMeshRouterRTSCTSv1.h"
 
 #include "inet/common/ModuleAccess.h"
 #include "inet/linklayer/common/Ieee802Ctrl.h"
@@ -34,20 +34,19 @@
 #include "../messages/BroadcastCTS_m.h"
 #include "../messages/BroadcastHeader_m.h"
 #include "../messages/BroadcastContinuousHeader_m.h"
-#include "../messages/BroadcastLeaderFragment_m.h"
 
 namespace rlora {
 
-Define_Module(LoRaMeshRouterTunedRTSCTS);
+Define_Module(LoRaMeshRouterRTSCTSv1);
 
-LoRaMeshRouterTunedRTSCTS::~LoRaMeshRouterTunedRTSCTS()
+LoRaMeshRouterRTSCTSv1::~LoRaMeshRouterRTSCTSv1()
 {
 }
 
 /****************************************************************
  * Initialization functions.
  */
-void LoRaMeshRouterTunedRTSCTS::initialize(int stage)
+void LoRaMeshRouterRTSCTSv1::initialize(int stage)
 {
     MacProtocolBase::initialize(stage);
     if (stage == INITSTAGE_LOCAL) {
@@ -87,12 +86,16 @@ void LoRaMeshRouterTunedRTSCTS::initialize(int stage)
         gotNewMessagToSend = new cMessage("gotNewMessagToSend");
         ctsCWTimeout = new cMessage("ctsCWTimeout");
         moreMessagesToSend = new cMessage("moreMessagesToSend");
+        transmissionEndTimeout = new cMessage("transmissionEndTimeout");
+        shortWait = new cMessage("shortWait");
 
         throughputSignal = registerSignal("throughputBps");
         effectiveThroughputSignal = registerSignal("effectiveThroughputBps");
         timeInQueue = registerSignal("timeInQueue");
-        sentMissionId = registerSignal("sentMissionId");
+        missionIdRtsSent = registerSignal("missionIdRtsSent");
+        missionIdFragmentSent = registerSignal("missionIdFragmentSent");
         receivedMissionId = registerSignal("receivedMissionId");
+        timeOfLastTrajectorySignal = registerSignal("timeOfLastTrajectorySignal");
 
         scheduleAt(simTime() + measurementInterval, throughputTimer);
         scheduleAt(intuniform(0, 1000) / 1000.0, nodeAnnounce);
@@ -103,7 +106,7 @@ void LoRaMeshRouterTunedRTSCTS::initialize(int stage)
     }
 }
 
-void LoRaMeshRouterTunedRTSCTS::finish()
+void LoRaMeshRouterRTSCTSv1::finish()
 {
     cancelAndDelete(mediumStateChange);
     cancelAndDelete(droppedPacket);
@@ -120,6 +123,8 @@ void LoRaMeshRouterTunedRTSCTS::finish()
     cancelAndDelete(gotNewMessagToSend);
     cancelAndDelete(ctsCWTimeout);
     cancelAndDelete(moreMessagesToSend);
+    cancelAndDelete(transmissionEndTimeout);
+    cancelAndDelete(shortWait);
 
     mediumStateChange = nullptr;
     droppedPacket = nullptr;
@@ -136,6 +141,8 @@ void LoRaMeshRouterTunedRTSCTS::finish()
     gotNewMessagToSend = nullptr;
     ctsCWTimeout = nullptr;
     moreMessagesToSend = nullptr;
+    transmissionEndTimeout = nullptr;
+    shortWait = nullptr;
 
     while (!packetQueue.isEmpty()) {
         auto *pkt = packetQueue.dequeuePacket();
@@ -145,7 +152,7 @@ void LoRaMeshRouterTunedRTSCTS::finish()
     currentTxFrame = nullptr;
 }
 
-void LoRaMeshRouterTunedRTSCTS::configureNetworkInterface()
+void LoRaMeshRouterRTSCTSv1::configureNetworkInterface()
 {
     // data rate
     networkInterface->setDatarate(bitrate);
@@ -158,7 +165,7 @@ void LoRaMeshRouterTunedRTSCTS::configureNetworkInterface()
     networkInterface->setPointToPoint(false);
 }
 
-queueing::IPassivePacketSource* LoRaMeshRouterTunedRTSCTS::getProvider(cGate *gate)
+queueing::IPassivePacketSource* LoRaMeshRouterRTSCTSv1::getProvider(cGate *gate)
 {
     return (gate->getId() == upperLayerInGateId) ? txQueue.get() : nullptr;
 }
@@ -167,7 +174,7 @@ queueing::IPassivePacketSource* LoRaMeshRouterTunedRTSCTS::getProvider(cGate *ga
 // Handle Messages and Signals
 // ================================================================================================
 
-void LoRaMeshRouterTunedRTSCTS::handleWithFsm(cMessage *msg)
+void LoRaMeshRouterRTSCTSv1::handleWithFsm(cMessage *msg)
 {
     EV << "Handlewigthfsms" << endl;
     EV << "Handlewigthfsms: " << msg << endl;
@@ -198,8 +205,12 @@ void LoRaMeshRouterTunedRTSCTS::handleWithFsm(cMessage *msg)
     {
         FSMA_Enter(turnOnReceiver();EV<<"Switched To SWITCHING"<<endl;);
         FSMA_Event_Transition(able-to-listen,
-                msg == mediumStateChange,
+                msg == mediumStateChange|| msg==shortWait,
                 LISTENING,
+        );
+        FSMA_Event_Transition(we-got-rts-now--send-cts,
+                msg==initiateCTS && isFreeToSend(),
+                CW_CTS,
         );
     }
 
@@ -286,10 +297,11 @@ void LoRaMeshRouterTunedRTSCTS::handleWithFsm(cMessage *msg)
     {
         FSMA_Enter(turnOnReceiver();EV<<"Switched To WAIT_CTS"<<endl;);
         FSMA_Event_Transition(we-didnt-get-cts-go-back-to-listening,
-//                && !currentlyReceivingOurCTS()
                 msg == CTSWaitTimeout,
-                LISTENING,
+                SWITCHING,
                 handleCTSTimeout();
+                scheduleAfter(sifs,shortWait)
+
         );
         FSMA_Event_Transition(Listening-Receiving,
                 isOurCTS(msg),
@@ -297,6 +309,7 @@ void LoRaMeshRouterTunedRTSCTS::handleWithFsm(cMessage *msg)
                 handleCTS(pkt);
         );
     }
+
     FSMA_State(TRANSMITING)
     {
         FSMA_Enter(turnOnTransmitter();EV<<"Switched To TRANSMITING"<<endl;);
@@ -313,9 +326,9 @@ void LoRaMeshRouterTunedRTSCTS::handleWithFsm(cMessage *msg)
     }
     FSMA_State(CW_CTS)
     {
-        FSMA_Enter(scheduleCTSCWTimer();EV<<"Switched To CW_CTS"<<endl;);
+        FSMA_Enter(EV<<"Switched To CW_CTS"<<endl;scheduleCTSCWTimer(););
         FSMA_Event_Transition(had-to-wait-cw-to-send-cts,
-                msg == ctsCWTimeout,
+                msg == ctsCWTimeout && !isReceiving(),
                 SEND_CTS,
                 invalidateCTSCWPeriod();
         );
@@ -328,10 +341,11 @@ void LoRaMeshRouterTunedRTSCTS::handleWithFsm(cMessage *msg)
         );
         FSMA_Event_Transition(got-packet-from-rts-source,
                 isPacketFromRTSSource(msg),
-                LISTENING,
+                SWITCHING,
                 invalidateCTSCWPeriod();
                 cancelCTSCWTimer();
                 handlePacket(pkt);
+                scheduleAfter(sifs,shortWait);
         );
     }
     FSMA_State(SEND_CTS)
@@ -352,21 +366,25 @@ void LoRaMeshRouterTunedRTSCTS::handleWithFsm(cMessage *msg)
         FSMA_Enter(turnOnReceiver();EV<<"Switched To AWAIT_TRANSMISSION"<<endl;);
         FSMA_Event_Transition(source-didnt-get-cts-just-go-back-to-regular-listening,
                 msg == transmissionStartTimeout && !isReceiving(),
-                LISTENING,
+                SWITCHING,
                 clearRTSsource();
+                cancelEvent(transmissionEndTimeout);
+                scheduleAfter(sifs,shortWait);
         );
         FSMA_Event_Transition(received-packet-check-whether-from-rts-source-then-handle,
                 isPacketFromRTSSource(msg),
-                LISTENING,
+                SWITCHING,
                 handlePacket(pkt);
                 cancelEvent(transmissionStartTimeout);
+                cancelEvent(transmissionEndTimeout);
+                scheduleAfter(sifs,shortWait);
+
         );
         // if we dont do this, we will be stuck here if a node get a message from a node other than the one from rts. should rarely happen
         FSMA_Event_Transition(got-some-random-message-just-remove-then-go-back-to-listening,
-                isLowerMessage(msg),
-                LISTENING,
-                delete msg;
-                cancelEvent(transmissionStartTimeout);
+                msg==transmissionEndTimeout,
+                SWITCHING,
+                scheduleAfter(sifs,shortWait);
         );
     }
     FSMA_State(RECEIVING)
@@ -374,8 +392,9 @@ void LoRaMeshRouterTunedRTSCTS::handleWithFsm(cMessage *msg)
         FSMA_Enter(EV<<"Switched To RECEIVING"<<endl;);
         FSMA_Event_Transition(received-message-handle-keep-listening,
                 isLowerMessage(msg),
-                LISTENING,
+                SWITCHING,
                 handlePacket(pkt);
+                scheduleAfter(sifs,shortWait)
         );
         FSMA_Event_Transition(receive-below-sensitivity,
                 msg == droppedPacket,
@@ -398,16 +417,15 @@ void LoRaMeshRouterTunedRTSCTS::handleWithFsm(cMessage *msg)
 
 }
 
-void LoRaMeshRouterTunedRTSCTS::handlePacket(Packet *packet)
+void LoRaMeshRouterRTSCTSv1::handlePacket(Packet *packet)
 {
-    EV << "handlePacket" << endl;
     bytesReceivedInInterval += packet->getByteLength();
     Packet *messageFrame = decapsulate(packet);
     auto chunk = messageFrame->peekAtFront<inet::Chunk>();
+    EV << "handlePacket: " << packet->getName() << endl;
 
     if (auto msg = dynamic_cast<const BroadcastHeader*>(chunk.get())) {
-        EV << "Received BroadcastHeader" << endl;
-        // TODO: we might receive a header with data inside of it if it is a neighbour packet. Maybe this will just be a leader fragment
+        EV << "GOT BroadcastHeader" << endl;
 
         int messageId = msg->getMessageId();
         int source = msg->getSource();
@@ -428,8 +446,6 @@ void LoRaMeshRouterTunedRTSCTS::handlePacket(Packet *packet)
             return;
         }
 
-        auto infoTag = messageFrame->getTag<MessageInfoTag>();
-
         FragmentedPacket incompletePacket;
         incompletePacket.messageId = messageId;
         incompletePacket.missionId = missionId;
@@ -449,83 +465,15 @@ void LoRaMeshRouterTunedRTSCTS::handlePacket(Packet *packet)
             incompleteNeighbourPktList.updatePacketId(source, messageId);
         }
 
-        if (infoTag->getWithRTS()) {
-            int sizeOfFragment = msg->getSize() > 255 - BROADCAST_FRAGMENT_META_SIZE ? 255 : msg->getSize() + BROADCAST_FRAGMENT_META_SIZE;
-            scheduleAfter(0, initiateCTS);
-            sizeOfFragment_CTSData = sizeOfFragment;
-            sourceOfRTS_CTSData = msg->getHop();
-            setRTSsource(msg->getHop());
-        }
-    }
-    else if (auto msg = dynamic_cast<const BroadcastLeaderFragment*>(chunk.get())) {
-        effectiveBytesReceivedInInterval += packet->getByteLength() - BROADCAST_LEADER_FRAGMENT_META_SIZE;
-
-        int messageId = msg->getMessageId();
-        int source = msg->getSource();
-        int missionId = msg->getMissionId();
-        bool isMissionMsg = msg->getRetransmit();
-
-        if (!isMissionMsg && !incompleteNeighbourPktList.isNewIdHigher(source, messageId)) {
-            delete packet;
-            return;
-        }
-
-        if (isMissionMsg && !incompleteMissionPktList.isNewIdHigher(source, missionId)) {
-            delete packet;
-            return;
-        }
-
-        FragmentedPacket incompletePacket;
-        incompletePacket.messageId = messageId;
-        incompletePacket.missionId = missionId;
-        incompletePacket.sourceNode = source;
-        incompletePacket.size = msg->getSize();
-        incompletePacket.lastHop = msg->getHop();
-        incompletePacket.received = 0;
-        incompletePacket.corrupted = false;
-        incompletePacket.retransmit = msg->getRetransmit();
-
-        if (isMissionMsg) {
-            incompleteMissionPktList.addPacket(incompletePacket);
-            incompleteMissionPktList.updatePacketId(source, missionId);
-        }
-        else {
-            incompleteNeighbourPktList.addPacket(incompletePacket);
-            incompleteNeighbourPktList.updatePacketId(source, messageId);
-        }
-
-        // wir senden schon mit dem ersten packet daten
-        BroadcastFragment *fragmentPayload = new BroadcastFragment();
-        fragmentPayload->setChunkLength(msg->getChunkLength());
-        fragmentPayload->setPayloadSize(msg->getPayloadSize());
-        fragmentPayload->setMessageId(messageId);
-        fragmentPayload->setMissionId(missionId);
-        fragmentPayload->setSource(source);
-        fragmentPayload->setFragmentId(0);
-
-        Result result;
-        if (isMissionMsg)
-            result = incompleteMissionPktList.addToIncompletePacket(fragmentPayload);
-        else
-            result = incompleteNeighbourPktList.addToIncompletePacket(fragmentPayload);
-
-        if (result.isComplete) {
-            if (result.sendUp) {
-                cMessage *readyMsg = new cMessage("Ready");
-                sendUp(readyMsg);
-                retransmitPacket(result.completePacket);
-            }
-
-            if (isMissionMsg)
-                incompleteMissionPktList.removePacketById(missionId);
-            else
-                incompleteNeighbourPktList.removePacketById(messageId);
-
-        }
-        delete fragmentPayload;
-
+        int sizeOfFragment = msg->getSize() > 255 - BROADCAST_FRAGMENT_META_SIZE ? 255 : msg->getSize() + BROADCAST_FRAGMENT_META_SIZE;
+        scheduleAfter(0, initiateCTS);
+        sizeOfFragment_CTSData = sizeOfFragment;
+        sourceOfRTS_CTSData = msg->getHop();
+        setRTSsource(msg->getHop());
     }
     else if (auto msg = dynamic_cast<const BroadcastContinuousHeader*>(chunk.get())) {
+        EV << "GOT BroadcastContinuousHeader" << endl;
+
         // We can only have gotten this BroadcastContinuousHeader if we are not receiving anything else soon.
         // Otherwise we would have sent CTS and the node would have gotten it
 
@@ -533,9 +481,9 @@ void LoRaMeshRouterTunedRTSCTS::handlePacket(Packet *packet)
         int source = msg->getSource();
         int missionId = msg->getMissionId();
 
-        // TODO: need to check if we have already gotten this fragment for that message. It can be from a different hop: again, we can get
+        // TODO: need to check if we have already gotten the header for that message. It can be from a different hop: again, we can get
         // fragments from different nodes and not in order
-        if (incompleteMissionPktList.isNewIdSame(source, missionId) || incompleteMissionPktList.isNewIdSame(source, messageId)) {
+        if (incompleteMissionPktList.isNewIdSame(source, missionId) || incompleteNeighbourPktList.isNewIdSame(source, messageId)) {
             scheduleAfter(0, initiateCTS);
             sizeOfFragment_CTSData = msg->getPayloadSizeOfNextFragment(); // TODO
             sourceOfRTS_CTSData = msg->getHopId();
@@ -543,7 +491,7 @@ void LoRaMeshRouterTunedRTSCTS::handlePacket(Packet *packet)
         }
     }
     else if (auto msg = dynamic_cast<const BroadcastFragment*>(chunk.get())) {
-        EV << "Received BroadcastFragment" << endl;
+        EV << "GOT BroadcastFragment" << endl;
         effectiveBytesReceivedInInterval += packet->getByteLength() - BROADCAST_FRAGMENT_META_SIZE;
 
         int messageId = msg->getMessageId();
@@ -566,13 +514,16 @@ void LoRaMeshRouterTunedRTSCTS::handlePacket(Packet *packet)
             }
             if (isMissionMsg)
                 incompleteMissionPktList.removePacketById(missionId);
-            else
+            else {
                 incompleteNeighbourPktList.removePacketById(messageId);
+                simtime_t time = timeOfLastTrajectory.calcAgeOfInformation(source, simTime());
+                emit(timeOfLastTrajectorySignal, time);
+                timeOfLastTrajectory.addTime(source, simTime());
+            }
         }
     }
     else if (auto msg = dynamic_cast<const BroadcastCTS*>(chunk.get())) {
-        EV << "Received BroadcastCTS" << endl;
-        // we are only here if we did not request the CTS
+        // we are only here if we did not request the CTS. We need to wait out the message before we are able to send
         ASSERT(msg->getHopId() != nodeId);
         int size = msg->getSizeOfFragment();
         if (endOngoingMsg->isScheduled()) {
@@ -584,32 +535,32 @@ void LoRaMeshRouterTunedRTSCTS::handlePacket(Packet *packet)
     delete packet;
 }
 
-void LoRaMeshRouterTunedRTSCTS::handleSelfMessage(cMessage *msg)
+void LoRaMeshRouterRTSCTSv1::handleSelfMessage(cMessage *msg)
 {
     EV << "handleSelfMessage" << endl;
     handleWithFsm(msg);
 }
 
-void LoRaMeshRouterTunedRTSCTS::handleUpperPacket(Packet *packet)
+void LoRaMeshRouterRTSCTSv1::handleUpperPacket(Packet *packet)
 {
     EV << "handleUpperPacket" << endl;
+// add header to queue
     const auto &payload = packet->peekAtFront<LoRaRobotPacket>();
     bool isMission = payload->isMission();
-
-    if (isMission)
-        createBroadcastPacket(packet->getByteLength(), -1, -1, true);
-    else
-        createNeighbourPacket(packet->getByteLength(), -1, false);
+    createBroadcastPacket(packet->getByteLength(), -1, -1, isMission);
 
     if (currentTxFrame == nullptr) {
         Packet *packetToSend = packetQueue.dequeuePacket();
         currentTxFrame = packetToSend;
     }
+    EV << "Before handle with fsm" << endl;
     handleWithFsm(gotNewMessagToSend);
+    EV << "After handle with fsm" << endl;
     delete packet;
+    EV << "Before delete" << endl;
 }
 
-void LoRaMeshRouterTunedRTSCTS::handleLowerPacket(Packet *msg)
+void LoRaMeshRouterRTSCTSv1::handleLowerPacket(Packet *msg)
 {
     EV << "handleLowerPacket" << endl;
     if (fsm.getState() == RECEIVING || fsm.getState() == WAIT_CTS || fsm.getState() == CW_CTS || fsm.getState() == AWAIT_TRANSMISSION) {
@@ -621,16 +572,7 @@ void LoRaMeshRouterTunedRTSCTS::handleLowerPacket(Packet *msg)
     }
 }
 
-/**
- * Notifies about a change in the possibility of pulling some packet from
- * the passive packet source at the given gate.
- *
- * This method is called, for example, when a new packet is inserted into
- * a queue. It allows the sink to pull a new packet from the queue.
- *
- * The gate parameter must be a valid gate of this module.
- */
-void LoRaMeshRouterTunedRTSCTS::handleCanPullPacketChanged(cGate *gate)
+void LoRaMeshRouterRTSCTSv1::handleCanPullPacketChanged(cGate *gate)
 {
     EV << "handleCanPullPacketChanged" << endl;
     Enter_Method("handleCanPullPacketChanged");
@@ -638,14 +580,14 @@ void LoRaMeshRouterTunedRTSCTS::handleCanPullPacketChanged(cGate *gate)
     handleUpperMessage(packet);
 }
 
-void LoRaMeshRouterTunedRTSCTS::handlePullPacketProcessed(Packet *packet, cGate *gate, bool successful)
+void LoRaMeshRouterRTSCTSv1::handlePullPacketProcessed(Packet *packet, cGate *gate, bool successful)
 {
     EV << "handlePullPacketProcessed" << endl;
     Enter_Method("handlePullPacketProcessed");
     throw cRuntimeError("Not supported callback");
 }
 
-void LoRaMeshRouterTunedRTSCTS::receiveSignal(cComponent *source, simsignal_t signalID, intval_t value, cObject *details)
+void LoRaMeshRouterRTSCTSv1::receiveSignal(cComponent *source, simsignal_t signalID, intval_t value, cObject *details)
 {
     EV << "receiveSignal" << endl;
     Enter_Method_Silent();
@@ -681,7 +623,7 @@ void LoRaMeshRouterTunedRTSCTS::receiveSignal(cComponent *source, simsignal_t si
 // Sending Functions
 // ================================================================================================
 
-void LoRaMeshRouterTunedRTSCTS::sendDataFrame()
+void LoRaMeshRouterRTSCTSv1::sendDataFrame()
 {
     EV << "sendDataFrame" << endl;
     auto frameToSend = getCurrentTransmission();
@@ -695,12 +637,31 @@ void LoRaMeshRouterTunedRTSCTS::sendDataFrame()
     }
 
     auto typeTag = frameToSend->getTag<MessageInfoTag>();
-    if (!typeTag->isNeighbourMsg()) {
-        emit(sentMissionId, typeTag->getMissionId());
+    int missionId = typeTag->getMissionId();
+    if (typeTag->isNeighbourMsg())
+        return;
+
+    if (typeTag->isHeader()) {
+        if (!missionIdRtsSentTracker.contains(missionId)) {
+            // We are here if we want to the send RTS for the first time for MissionId
+            emit(missionIdRtsSent, missionId);
+            missionIdRtsSentTracker.add(missionId);
+            return;
+        }
+    }
+    else {
+        // We are only here if we send first fragment of message
+        if (!missionIdFragmentSentTracker.contains(missionId)) {
+            {
+                emit(missionIdFragmentSent, missionId);
+                missionIdFragmentSentTracker.add(missionId);
+
+            }
+        }
     }
 }
 
-void LoRaMeshRouterTunedRTSCTS::announceNodeId(int respond)
+void LoRaMeshRouterRTSCTSv1::announceNodeId(int respond)
 {
     EV << "announceNodeId" << endl;
     auto nodeAnnouncePacket = new Packet("NodeAnnouncePacket");
@@ -722,7 +683,7 @@ void LoRaMeshRouterTunedRTSCTS::announceNodeId(int respond)
     packetQueue.enqueueNodeAnnounce(fragmentEncap);
 }
 
-void LoRaMeshRouterTunedRTSCTS::retransmitPacket(FragmentedPacket fragmentedPacket)
+void LoRaMeshRouterRTSCTSv1::retransmitPacket(FragmentedPacket fragmentedPacket)
 {
     EV << "retransmitPacket" << endl;
 // jedes feld muss gleich sein vom fragemntierten packet außer lastHop
@@ -741,7 +702,7 @@ void LoRaMeshRouterTunedRTSCTS::retransmitPacket(FragmentedPacket fragmentedPack
 // ================================================================================================
 
 // We do not have to do anything else with cts
-void LoRaMeshRouterTunedRTSCTS::handleCTS(Packet *pkt)
+void LoRaMeshRouterRTSCTSv1::handleCTS(Packet *pkt)
 {
     EV << "handleCTS" << endl;
     cancelEvent(CTSWaitTimeout);
@@ -750,18 +711,15 @@ void LoRaMeshRouterTunedRTSCTS::handleCTS(Packet *pkt)
 }
 
 // Put packet back to queue at front and currentTxFrame is the header again, to try once again. After 3 tries delete the packet
-void LoRaMeshRouterTunedRTSCTS::handleCTSTimeout()
+void LoRaMeshRouterRTSCTSv1::handleCTSTimeout()
 {
     EV << "handleCTSTimeout" << endl;
     auto frameToSend = getCurrentTransmission();
-    EV << "Got frame: " << frameToSend << endl;
     auto infoTag = frameToSend->getTagForUpdate<MessageInfoTag>();
-    EV << "tried accessing" << endl;
     auto frag = frameToSend->peekAtFront<BroadcastFragment>();
 
     int newTries = infoTag->getTries() + 1;
     infoTag->setTries(newTries);
-    EV << "vor try abfrage" << endl;
     if (newTries >= 3) {
         deleteCurrentTxFrame();
         if (!packetQueue.isEmpty()) {
@@ -770,24 +728,21 @@ void LoRaMeshRouterTunedRTSCTS::handleCTSTimeout()
         EV << "PRE END handleCTSTimeout" << endl;
         return;
     }
-    EV << "nach try abfrage" << endl;
 
     packetQueue.enqueuePacketAtPosition(frameToSend, 0);
 
     ASSERT(frag != nullptr);
     ASSERT(infoTag->getPayloadSize() != -1);
     if (infoTag->getHasRegularHeader()) {
-        EV << "CurrentTxFrame is header: " << packetQueue.toString() << endl;
         currentTxFrame = createHeader(frag->getMissionId(), frag->getSource(), infoTag->getPayloadSize(), !infoTag->isNeighbourMsg());
     }
     else {
-        EV << "CurrentTxFrame is continuous header: " << packetQueue.toString() << endl;
         currentTxFrame = createContinuousHeader(frag->getMissionId(), frag->getSource(), infoTag->getPayloadSize(), !infoTag->isNeighbourMsg());
     }
     EV << "END handleCTSTimeout" << endl;
 }
 
-bool LoRaMeshRouterTunedRTSCTS::withRTS()
+bool LoRaMeshRouterRTSCTSv1::withRTS()
 {
     EV << "withRTS" << endl;
     auto frameToSend = getCurrentTransmission();
@@ -795,7 +750,7 @@ bool LoRaMeshRouterTunedRTSCTS::withRTS()
     return infoTag->getWithRTS();
 }
 
-bool LoRaMeshRouterTunedRTSCTS::isOurCTS(cMessage *msg)
+bool LoRaMeshRouterRTSCTSv1::isOurCTS(cMessage *msg)
 {
     EV << "isOurCTS: " << msg << endl;
     auto pkt = dynamic_cast<Packet*>(msg);
@@ -816,7 +771,7 @@ bool LoRaMeshRouterTunedRTSCTS::isOurCTS(cMessage *msg)
     return false;
 }
 
-bool LoRaMeshRouterTunedRTSCTS::isCTSForSameRTSSource(cMessage *msg)
+bool LoRaMeshRouterRTSCTSv1::isCTSForSameRTSSource(cMessage *msg)
 {
     EV << "isCTSForSameRTSSource: " << msg << endl;
 
@@ -835,37 +790,30 @@ bool LoRaMeshRouterTunedRTSCTS::isCTSForSameRTSSource(cMessage *msg)
     return false;
 }
 
-//// TODO: find out if we are currenlty receiving and if yes whether it is a CTS for us
-//bool LoRaMeshRouterTunedRTSCTS::currentlyReceivingOurCTS()
-//{
-//    EV << "currentlyReceivingOurCTS" << endl;
-//    return false;
-//}
-
-// the RTS is just the currentTxFrame which is just the header.
-// Though make sure that it is really a header and there is also another packet afterwards. ASSERT
-void LoRaMeshRouterTunedRTSCTS::sendRTS()
+void LoRaMeshRouterRTSCTSv1::sendRTS()
 {
     EV << "sendRTS" << endl;
-    auto frameToSend = getCurrentTransmission();
-    auto typeTag = frameToSend->getTag<MessageInfoTag>();
+    auto header = getCurrentTransmission();
+    auto typeTag = header->getTag<MessageInfoTag>();
     ASSERT(typeTag->isHeader());
 
-    scheduleAfter(ctsFS * cwCTS + sifs + predictOngoingMsgTime(frameToSend->getByteLength()), CTSWaitTimeout);
-    sendDown(frameToSend->dup());
-    delete frameToSend;
+    // TODO +ctsFS
+    scheduleAfter(ctsFS * cwCTS + sifs + predictOngoingMsgTime(header->getByteLength()) + ctsFS, CTSWaitTimeout);
+    sendDown(header->dup());
+    delete header;
 
     ASSERT(!packetQueue.isEmpty());
     currentTxFrame = packetQueue.dequeuePacket();
 }
 
-void LoRaMeshRouterTunedRTSCTS::sendCTS()
+void LoRaMeshRouterRTSCTSv1::sendCTS()
 {
     EV << "sendCTS" << endl;
     auto ctsPacket = new Packet("BroadcastCTS");
     auto ctsPayload = makeShared<BroadcastCTS>();
 
-    ASSERT(sourceOfRTS_CTSData > 0 && sizeOfFragment_CTSData > 0);
+    ASSERT(sizeOfFragment_CTSData > 0);
+    ASSERT(source_CTSData > 0);
     ctsPayload->setChunkLength(B(BROADCAST_CTS));
     ctsPayload->setSizeOfFragment(sizeOfFragment_CTSData);
     ctsPayload->setHopId(sourceOfRTS_CTSData);
@@ -879,31 +827,33 @@ void LoRaMeshRouterTunedRTSCTS::sendCTS()
 
     // After we send CTS, we need to receive message within ctsFS + sifs otherwise we assume there will be no message
     scheduleAfter(ctsFS + sifs, transmissionStartTimeout);
+    scheduleAfter(ctsFS + sifs + predictOngoingMsgTime(sizeOfFragment_CTSData), transmissionEndTimeout);
     sizeOfFragment_CTSData = -1;
     sourceOfRTS_CTSData = -1;
 }
 
-void LoRaMeshRouterTunedRTSCTS::clearRTSsource()
+void LoRaMeshRouterRTSCTSv1::clearRTSsource()
 {
     EV << "clearRTSsource" << endl;
     rtsSource = -1;
 }
 
-void LoRaMeshRouterTunedRTSCTS::setRTSsource(int rtsSourceId)
+void LoRaMeshRouterRTSCTSv1::setRTSsource(int rtsSourceId)
 {
     EV << "setRTSsource" << endl;
     rtsSource = rtsSourceId;
 }
 
-bool LoRaMeshRouterTunedRTSCTS::isPacketFromRTSSource(cMessage *msg)
+bool LoRaMeshRouterRTSCTSv1::isPacketFromRTSSource(cMessage *msg)
 {
     EV << "isPacketFromRTSSource" << endl;
     if (!isLowerMessage(msg)) {
         return false;
     }
 
-    auto packet = dynamic_cast<Packet*>(msg);
+    auto packet = dynamic_cast<Packet*>(msg->dup());
     EV << "Tags packet: " << packet->getTags() << endl;
+    // TODO
     Packet *messageFrame = decapsulate(packet);
     auto chunk = messageFrame->peekAtFront<inet::Chunk>();
 
@@ -914,9 +864,11 @@ bool LoRaMeshRouterTunedRTSCTS::isPacketFromRTSSource(cMessage *msg)
         auto infoTag = packet->getTag<MessageInfoTag>();
         if (infoTag->getHopId() == rtsSource) {
             clearRTSsource();
+            delete packet;
             return true;
         }
     }
+    delete packet;
     delete msg;
     return false;
 }
@@ -928,11 +880,9 @@ bool LoRaMeshRouterTunedRTSCTS::isPacketFromRTSSource(cMessage *msg)
 // Packet Creation
 // ================================================================================================
 
-// TODO: if we want to send Neighbour broadcast, then we dont need a separat header. Or just send leader fragment
-void LoRaMeshRouterTunedRTSCTS::createBroadcastPacket(int payloadSize, int missionId, int source, bool retransmit)
+void LoRaMeshRouterRTSCTSv1::createBroadcastPacket(int payloadSize, int missionId, int source, bool retransmit)
 {
     EV << "createBroadcastPacket" << endl;
-
     if (source == -1) {
         source = nodeId;
     }
@@ -989,7 +939,6 @@ void LoRaMeshRouterTunedRTSCTS::createBroadcastPacket(int payloadSize, int missi
         messageInfoTag->setHopId(nodeId);
         messageInfoTag->setHasUsefulData(true);
         messageInfoTag->setPayloadSize(currentPayloadSize);
-        messageInfoTag->setWithRTS(retransmit);
 
         encapsulate(fragmentPacket);
 
@@ -1001,85 +950,7 @@ void LoRaMeshRouterTunedRTSCTS::createBroadcastPacket(int payloadSize, int missi
     }
 }
 
-void LoRaMeshRouterTunedRTSCTS::createNeighbourPacket(int payloadSize, int source, bool retransmit)
-{
-    auto headerPaket = new Packet("BroadcastLeaderFragment");
-    auto headerPayload = makeShared<BroadcastLeaderFragment>();
-    int messageId = headerPaket->getId();
-    int fullPayloadSize = payloadSize;
-
-    if (source == -1) {
-        source = nodeId;
-    }
-
-    headerPayload->setChunkLength(B(payloadSize + BROADCAST_LEADER_FRAGMENT_META_SIZE));
-    headerPayload->setPayloadSize(payloadSize);
-    headerPayload->setSize(fullPayloadSize);
-    headerPayload->setMessageId(messageId);
-    headerPayload->setMissionId(-1);
-    headerPayload->setSource(source);
-    headerPayload->setHop(nodeId);
-    headerPayload->setRetransmit(retransmit);
-    headerPaket->insertAtBack(headerPayload);
-    headerPaket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
-
-    auto messageInfoTag = headerPaket->addTagIfAbsent<MessageInfoTag>();
-    messageInfoTag->setIsNeighbourMsg(true);
-    messageInfoTag->setMissionId(-1);
-    messageInfoTag->setIsHeader(true);
-    messageInfoTag->setHasUsefulData(true);
-    messageInfoTag->setPayloadSize(payloadSize);
-
-    encapsulate(headerPaket);
-
-    bool trackQueueTime = packetQueue.enqueuePacket(headerPaket);
-    if (trackQueueTime) {
-        idToAddedTimeMap[headerPaket->getId()] = simTime();
-    }
-
-    // INFO: das nullte packet ist das was im leader direkt mitgeschickt wird
-    int i = 1;
-    while (payloadSize > 0) {
-        auto fragmentPacket = new Packet("BroadcastFragmentPkt");
-        auto fragmentPayload = makeShared<BroadcastFragment>();
-
-        int currentPayloadSize = 0;
-        if (payloadSize + BROADCAST_FRAGMENT_META_SIZE > 255) {
-            currentPayloadSize = 255 - BROADCAST_FRAGMENT_META_SIZE;
-            fragmentPayload->setChunkLength(B(255));
-            fragmentPayload->setPayloadSize(currentPayloadSize);
-            payloadSize = payloadSize - currentPayloadSize;
-        }
-        else {
-            currentPayloadSize = payloadSize;
-            fragmentPayload->setChunkLength(B(currentPayloadSize + BROADCAST_FRAGMENT_META_SIZE));
-            fragmentPayload->setPayloadSize(currentPayloadSize);
-            payloadSize = 0;
-        }
-
-        fragmentPayload->setMessageId(messageId);
-        fragmentPayload->setMissionId(-1);
-        fragmentPayload->setSource(source);
-        fragmentPayload->setFragmentId(i++);
-        fragmentPacket->insertAtBack(fragmentPayload);
-        fragmentPacket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
-
-        auto messageInfoTag = fragmentPacket->addTagIfAbsent<MessageInfoTag>();
-        messageInfoTag->setIsNeighbourMsg(true);
-        messageInfoTag->setMissionId(-1);
-        messageInfoTag->setIsHeader(false);
-        messageInfoTag->setHasUsefulData(true);
-        messageInfoTag->setPayloadSize(currentPayloadSize);
-
-        encapsulate(fragmentPacket);
-        packetQueue.enqueuePacket(fragmentPacket);
-        if (trackQueueTime) {
-            idToAddedTimeMap[fragmentPacket->getId()] = simTime();
-        }
-    }
-}
-
-Packet* LoRaMeshRouterTunedRTSCTS::createHeader(int missionId, int source, int payloadSize, bool retransmit)
+Packet* LoRaMeshRouterRTSCTSv1::createHeader(int missionId, int source, int payloadSize, bool retransmit)
 {
     EV << "createHeader" << endl;
 
@@ -1104,13 +975,12 @@ Packet* LoRaMeshRouterTunedRTSCTS::createHeader(int missionId, int source, int p
     messageInfoTag->setIsNeighbourMsg(!retransmit);
     messageInfoTag->setMissionId(missionId);
     messageInfoTag->setIsHeader(true);
-    messageInfoTag->setWithRTS(retransmit);
 
     encapsulate(headerPaket);
     return headerPaket;
 }
 
-Packet* LoRaMeshRouterTunedRTSCTS::createContinuousHeader(int missionId, int source, int payloadSize, bool retransmit)
+Packet* LoRaMeshRouterRTSCTSv1::createContinuousHeader(int missionId, int source, int payloadSize, bool retransmit)
 {
     EV << "createContinuousHeader" << endl;
     Packet *headerPaket = new Packet("BroadcastContinuousHeader");
@@ -1121,9 +991,11 @@ Packet* LoRaMeshRouterTunedRTSCTS::createContinuousHeader(int missionId, int sou
 
     auto headerPayload = makeShared<BroadcastContinuousHeader>();
     headerPayload->setChunkLength(B(BROADCAST_CONTINIOUS_HEADER));
-    headerPayload->setPayloadSizeOfNextFragment(payloadSize);
+    headerPayload->setPayloadSizeOfNextFragment(payloadSize + BROADCAST_FRAGMENT_META_SIZE);
     headerPayload->setHopId(nodeId);
+    headerPayload->setSource(source);
     headerPayload->setMessageId(headerPaket->getId());
+    headerPayload->setMissionId(missionId);
     headerPaket->insertAtBack(headerPayload);
     headerPaket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
 
@@ -1131,13 +1003,12 @@ Packet* LoRaMeshRouterTunedRTSCTS::createContinuousHeader(int missionId, int sou
     messageInfoTag->setIsNeighbourMsg(!retransmit);
     messageInfoTag->setMissionId(missionId);
     messageInfoTag->setIsHeader(true);
-    messageInfoTag->setWithRTS(retransmit);
 
     encapsulate(headerPaket);
     return headerPaket;
 }
 
-Packet* LoRaMeshRouterTunedRTSCTS::encapsulate(Packet *msg)
+Packet* LoRaMeshRouterRTSCTSv1::encapsulate(Packet *msg)
 {
     EV << "encapsulate" << endl;
     auto frame = makeShared<LoRaMacFrame>();
@@ -1167,7 +1038,7 @@ Packet* LoRaMeshRouterTunedRTSCTS::encapsulate(Packet *msg)
     return msg;
 }
 
-Packet* LoRaMeshRouterTunedRTSCTS::decapsulate(Packet *frame)
+Packet* LoRaMeshRouterRTSCTSv1::decapsulate(Packet *frame)
 {
     EV << "decapsulate" << endl;
     auto loraHeader = frame->popAtFront<LoRaMacFrame>();
@@ -1185,19 +1056,19 @@ Packet* LoRaMeshRouterTunedRTSCTS::decapsulate(Packet *frame)
 // Backoff Period
 // ================================================================================================
 
-void LoRaMeshRouterTunedRTSCTS::invalidateBackoffPeriod()
+void LoRaMeshRouterRTSCTSv1::invalidateBackoffPeriod()
 {
     EV << "invalidateBackoffPeriod" << endl;
     backoffPeriod = -1;
 }
 
-bool LoRaMeshRouterTunedRTSCTS::isInvalidBackoffPeriod()
+bool LoRaMeshRouterRTSCTSv1::isInvalidBackoffPeriod()
 {
     EV << "isInvalidBackoffPeriod" << endl;
     return backoffPeriod == -1;
 }
 
-void LoRaMeshRouterTunedRTSCTS::generateBackoffPeriod()
+void LoRaMeshRouterRTSCTSv1::generateBackoffPeriod()
 {
     EV << "generateBackoffPeriod" << endl;
     int slots = intrand(cwBackoff);
@@ -1205,7 +1076,7 @@ void LoRaMeshRouterTunedRTSCTS::generateBackoffPeriod()
     backoffPeriod = slots * backoffFS;
 }
 
-void LoRaMeshRouterTunedRTSCTS::scheduleBackoffTimer()
+void LoRaMeshRouterRTSCTSv1::scheduleBackoffTimer()
 {
     EV << "scheduleBackoffTimer" << endl;
     if (isInvalidBackoffPeriod())
@@ -1214,7 +1085,7 @@ void LoRaMeshRouterTunedRTSCTS::scheduleBackoffTimer()
     scheduleAfter(backoffPeriod, endBackoff);
 }
 
-void LoRaMeshRouterTunedRTSCTS::decreaseBackoffPeriod()
+void LoRaMeshRouterRTSCTSv1::decreaseBackoffPeriod()
 {
     EV << "decreaseBackoffPeriod" << endl;
     simtime_t elapsedBackoffTime = simTime() - endBackoff->getSendingTime();
@@ -1222,7 +1093,7 @@ void LoRaMeshRouterTunedRTSCTS::decreaseBackoffPeriod()
     ASSERT(backoffPeriod >= 0);
 }
 
-void LoRaMeshRouterTunedRTSCTS::cancelBackoffTimer()
+void LoRaMeshRouterRTSCTSv1::cancelBackoffTimer()
 {
     EV << "cancelBackoffTimer" << endl;
     cancelEvent(endBackoff);
@@ -1235,19 +1106,19 @@ void LoRaMeshRouterTunedRTSCTS::cancelBackoffTimer()
 // CTS CW Period
 // ================================================================================================
 
-void LoRaMeshRouterTunedRTSCTS::invalidateCTSCWPeriod()
+void LoRaMeshRouterRTSCTSv1::invalidateCTSCWPeriod()
 {
     EV << "invalidateCTSCWPeriod" << endl;
     ctsCWPeriod = -1;
 }
 
-bool LoRaMeshRouterTunedRTSCTS::isInvalidCTSCWPeriod()
+bool LoRaMeshRouterRTSCTSv1::isInvalidCTSCWPeriod()
 {
     EV << "isInvalidCTSCWPeriod" << endl;
     return ctsCWPeriod == -1;
 }
 
-void LoRaMeshRouterTunedRTSCTS::generateCTSCWPeriod()
+void LoRaMeshRouterRTSCTSv1::generateCTSCWPeriod()
 {
     EV << "generateCTSCWPeriod" << endl;
     int slots = intrand(cwCTS);
@@ -1255,7 +1126,7 @@ void LoRaMeshRouterTunedRTSCTS::generateCTSCWPeriod()
     ctsCWPeriod = slots * ctsFS;
 }
 
-void LoRaMeshRouterTunedRTSCTS::scheduleCTSCWTimer()
+void LoRaMeshRouterRTSCTSv1::scheduleCTSCWTimer()
 {
     EV << "scheduleCTSCWTimer" << endl;
     if (isInvalidCTSCWPeriod())
@@ -1264,7 +1135,7 @@ void LoRaMeshRouterTunedRTSCTS::scheduleCTSCWTimer()
     scheduleAfter(ctsCWPeriod, ctsCWTimeout);
 }
 
-void LoRaMeshRouterTunedRTSCTS::cancelCTSCWTimer()
+void LoRaMeshRouterRTSCTSv1::cancelCTSCWTimer()
 {
     EV << "cancelCTSCWTimer" << endl;
     cancelEvent(ctsCWTimeout);
@@ -1277,19 +1148,19 @@ void LoRaMeshRouterTunedRTSCTS::cancelCTSCWTimer()
 // Radio Utils
 // ================================================================================================
 
-bool LoRaMeshRouterTunedRTSCTS::isMediumFree()
+bool LoRaMeshRouterRTSCTSv1::isMediumFree()
 {
     EV << "isMediumFree" << endl;
     return radio->getReceptionState() == IRadio::RECEPTION_STATE_IDLE;
 }
 
-bool LoRaMeshRouterTunedRTSCTS::isReceiving()
+bool LoRaMeshRouterRTSCTSv1::isReceiving()
 {
     EV << "isReceiving" << endl;
     return radio->getReceptionState() == IRadio::RECEPTION_STATE_RECEIVING;
 }
 
-void LoRaMeshRouterTunedRTSCTS::turnOnReceiver()
+void LoRaMeshRouterRTSCTSv1::turnOnReceiver()
 {
 // this makes receiverPart go to idle no matter what
     EV << "turnOnReceiver" << endl;
@@ -1297,7 +1168,7 @@ void LoRaMeshRouterTunedRTSCTS::turnOnReceiver()
     loraRadio = check_and_cast<LoRaRadio*>(radio);
     loraRadio->setRadioMode(IRadio::RADIO_MODE_RECEIVER);
 }
-void LoRaMeshRouterTunedRTSCTS::turnOnTransmitter()
+void LoRaMeshRouterRTSCTSv1::turnOnTransmitter()
 {
 // this makes receiverPart go to idle no matter what
     EV << "turnOnTransmitter" << endl;
@@ -1306,7 +1177,7 @@ void LoRaMeshRouterTunedRTSCTS::turnOnTransmitter()
     loraRadio->setRadioMode(IRadio::RADIO_MODE_TRANSMITTER);
 }
 
-void LoRaMeshRouterTunedRTSCTS::turnOffReceiver()
+void LoRaMeshRouterRTSCTSv1::turnOffReceiver()
 {
     EV << "turnOffReceiver" << endl;
     LoRaRadio *loraRadio;
@@ -1321,33 +1192,33 @@ void LoRaMeshRouterTunedRTSCTS::turnOffReceiver()
 // Helper functions
 // ================================================================================================
 
-void LoRaMeshRouterTunedRTSCTS::finishCurrentTransmission()
+void LoRaMeshRouterRTSCTSv1::finishCurrentTransmission()
 {
     EV << "finishCurrentTransmission" << endl;
     deleteCurrentTxFrame();
 }
 
-Packet* LoRaMeshRouterTunedRTSCTS::getCurrentTransmission()
+Packet* LoRaMeshRouterRTSCTSv1::getCurrentTransmission()
 {
     EV << "getCurrentTransmission" << endl;
     ASSERT(currentTxFrame != nullptr);
     return currentTxFrame;
 }
 
-MacAddress LoRaMeshRouterTunedRTSCTS::getAddress()
+MacAddress LoRaMeshRouterRTSCTSv1::getAddress()
 {
     return address;
 }
 
 // We do not have to wait for a ongoing transmission by a hidden node. Have to check before going into backoff period
 // AND we are not waiting for the start of a message
-bool LoRaMeshRouterTunedRTSCTS::isFreeToSend()
+bool LoRaMeshRouterRTSCTSv1::isFreeToSend()
 {
     EV << "isFreeToSend" << endl;
     return !endOngoingMsg->isScheduled() && !transmissionStartTimeout->isScheduled();
 }
 
-double LoRaMeshRouterTunedRTSCTS::predictOngoingMsgTime(int packetBytes)
+double LoRaMeshRouterRTSCTSv1::predictOngoingMsgTime(int packetBytes)
 {
     EV << "predictOngoingMsgTime" << endl;
     double sf = loRaRadio->loRaSF;

@@ -46,12 +46,13 @@ void LoRaApp::initialize(int stage)
     }
 }
 
-void LoRaApp::finish(){
+void LoRaApp::finish()
+{
     cancelAndDelete(sendTrajectory);
     cancelAndDelete(sendMission);
 
-    sendTrajectory=nullptr;
-    sendMission=nullptr;
+    sendTrajectory = nullptr;
+    sendMission = nullptr;
 }
 
 void LoRaApp::handleMessage(cMessage *msg)
@@ -64,7 +65,7 @@ void LoRaApp::handleMessage(cMessage *msg)
 
         if (msg == sendMission) {
             sendMessageDown(true);
-            scheduleAt(simTime() + timeToNextMission, sendMission);
+            scheduleAt(simTime() + normal(timeToNextMission, 0.1), sendMission);
         }
     }
     else {
@@ -80,7 +81,7 @@ void LoRaApp::sendMessageDown(bool isMission)
 
     payload->setIsMission(isMission);
     if (isMission) {
-        payload->setChunkLength(B(intuniform(50, 100)));
+        payload->setChunkLength(B(intuniform(50, 240)));
     }
     else {
         payload->setChunkLength(B(144));

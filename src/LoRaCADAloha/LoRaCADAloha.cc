@@ -80,8 +80,9 @@ void LoRaCADAloha::initialize(int stage)
         throughputSignal = registerSignal("throughputBps");
         effectiveThroughputSignal = registerSignal("effectiveThroughputBps");
         timeInQueue = registerSignal("timeInQueue");
-        sentMissionId = registerSignal("sentMissionId");
+        missionIdFragmentSent = registerSignal("missionIdFragmentSent");
         receivedMissionId = registerSignal("receivedMissionId");
+        timeOfLastTrajectorySignal = registerSignal("timeOfLastTrajectorySignal");
 
         scheduleAt(simTime() + measurementInterval, throughputTimer);
         scheduleAt(intuniform(0, 1000) / 1000.0, nodeAnnounce);
@@ -270,7 +271,6 @@ void LoRaCADAloha::handleWithFsm(cMessage *msg)
     }
 }
 
-
 void LoRaCADAloha::handlePacket(Packet *packet)
 {
     bytesReceivedInInterval += packet->getByteLength();
@@ -306,7 +306,6 @@ void LoRaCADAloha::handlePacket(Packet *packet)
         incompletePacket.corrupted = false;
         incompletePacket.retransmit = msg->getRetransmit();
 
-
         if (isMissionMsg) {
             incompleteMissionPktList.addPacket(incompletePacket);
             incompleteMissionPktList.updatePacketId(source, missionId);
@@ -340,9 +339,12 @@ void LoRaCADAloha::handlePacket(Packet *packet)
 
             if (isMissionMsg)
                 incompleteMissionPktList.removePacketById(missionId);
-            else
+            else {
                 incompleteNeighbourPktList.removePacketById(messageId);
-
+                simtime_t time = timeOfLastTrajectory.calcAgeOfInformation(source, simTime());
+                emit(timeOfLastTrajectorySignal, time);
+                timeOfLastTrajectory.addTime(source, simTime());
+            }
         }
         delete fragmentPayload;
 
@@ -459,7 +461,7 @@ void LoRaCADAloha::sendDataFrame()
 
     auto typeTag = frameToSend->getTag<MessageInfoTag>();
     if (!typeTag->isNeighbourMsg()) {
-        emit(sentMissionId, typeTag->getMissionId());
+        emit(missionIdFragmentSent, typeTag->getMissionId());
     }
 }
 

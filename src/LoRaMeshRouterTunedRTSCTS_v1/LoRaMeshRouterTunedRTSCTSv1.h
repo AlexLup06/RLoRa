@@ -13,8 +13,8 @@
 // along with this program.  If not, see http://www.gnu.org/licenses/.
 // 
 
-#ifndef LORAMESHROUTERTUNEDRTSCTS_LORAMESHROUTERTUNEDRTSCTS_H_
-#define LORAMESHROUTERTUNEDRTSCTS_LORAMESHROUTERTUNEDRTSCTS_H_
+#ifndef LORAMESHROUTERTUNEDRTSCTS_V1_LORAMESHROUTERTUNEDRTSCTSV1_H_
+#define LORAMESHROUTERTUNEDRTSCTS_V1_LORAMESHROUTERTUNEDRTSCTSV1_H_
 
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IRadio.h"
 #include "inet/linklayer/contract/IMacProtocol.h"
@@ -32,6 +32,8 @@
 
 #include "../helpers/CustomPacketQueue.h"
 #include "../helpers/IncompletePacketList.h"
+#include "../helpers/MissionIdTracker.h"
+#include "../helpers/TimeOfLastTrajectory.h"
 
 using namespace inet;
 using namespace physicallayer;
@@ -42,7 +44,7 @@ namespace rlora {
  * Based on CSMA class
  */
 
-class LoRaMeshRouterTunedRTSCTS : public MacProtocolBase, public IMacProtocol, public queueing::IActivePacketSink
+class LoRaMeshRouterTunedRTSCTSv1 : public MacProtocolBase, public IMacProtocol, public queueing::IActivePacketSink
 {
 
 protected:
@@ -64,8 +66,10 @@ protected:
     simsignal_t throughputSignal;
     simsignal_t effectiveThroughputSignal;
     simsignal_t timeInQueue;
-    simsignal_t sentMissionId;
+    simsignal_t missionIdFragmentSent;
+    simsignal_t missionIdRtsSent;
     simsignal_t receivedMissionId;
+    simsignal_t timeOfLastTrajectorySignal;
 
     simtime_t measurementInterval = 1.0;
     simtime_t backoffPeriod = -1;
@@ -98,19 +102,24 @@ protected:
     cMessage *throughputTimer = nullptr;
     cMessage *ctsCWTimeout = nullptr;
     cMessage *moreMessagesToSend = nullptr;
+    cMessage *transmissionEndTimeout = nullptr;
+    cMessage *shortWait = nullptr;
 
     IncompletePacketList incompleteMissionPktList;
     IncompletePacketList incompleteNeighbourPktList;
     CustomPacketQueue packetQueue;
     LoRaRadio *loRaRadio;
     map<int, SimTime> idToAddedTimeMap;
+    MissionIdTracker missionIdRtsSentTracker;
+    MissionIdTracker missionIdFragmentSentTracker;
+    TimeOfLastTrajectory timeOfLastTrajectory;
 
 public:
     /**
      * @name Construction functions
      */
     //@{
-    virtual ~LoRaMeshRouterTunedRTSCTS();
+    virtual ~LoRaMeshRouterTunedRTSCTSv1();
     //@}
     virtual MacAddress getAddress();
     virtual queueing::IPassivePacketSource* getProvider(cGate *gate) override;
@@ -216,4 +225,4 @@ protected:
 
 } // namespace rlora
 
-#endif /* LORAMESHROUTERTUNEDRTSCTS_LORAMESHROUTERTUNEDRTSCTS_H_ */
+#endif /* LORAMESHROUTERTUNEDRTSCTS_V1_LORAMESHROUTERTUNEDRTSCTSV1_H_ */

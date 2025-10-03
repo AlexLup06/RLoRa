@@ -17,6 +17,9 @@
 
 #include "../helpers/CustomPacketQueue.h"
 #include "../helpers/IncompletePacketList.h"
+#include "../helpers/MissionIdTracker.h"
+#include "../helpers/TimeOfLastTrajectory.h"
+
 
 using namespace inet;
 using namespace physicallayer;
@@ -52,8 +55,9 @@ protected:
     simsignal_t throughputSignal;
     simsignal_t effectiveThroughputSignal;
     simsignal_t timeInQueue;
-    simsignal_t sentMissionId;
+    simsignal_t missionIdFragmentSent;
     simsignal_t receivedMissionId;
+    simsignal_t timeOfLastTrajectorySignal;
 
     map<int, SimTime> idToAddedTimeMap;
 
@@ -70,8 +74,9 @@ protected:
     IncompletePacketList incompleteNeighbourPktList;
     CustomPacketQueue packetQueue;
     LoRaRadio *loRaRadio;
+    MissionIdTracker missionIdFragmentSentTracker;
+    TimeOfLastTrajectory timeOfLastTrajectory;
 
-//    Packet *currentNodeAnnounceFrame = nullptr;
 public:
     /**
      * @name Construction functions

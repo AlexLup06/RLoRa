@@ -86,8 +86,9 @@ void LoRaAloha::initialize(int stage)
         throughputSignal = registerSignal("throughputBps");
         effectiveThroughputSignal = registerSignal("effectiveThroughputBps");
         timeInQueue = registerSignal("timeInQueue");
-        sentMissionId = registerSignal("sentMissionId");
+        missionIdFragmentSent = registerSignal("missionIdFragmentSent");
         receivedMissionId = registerSignal("receivedMissionId");
+        timeOfLastTrajectorySignal = registerSignal("timeOfLastTrajectorySignal");
 
         scheduleAt(simTime() + measurementInterval, throughputTimer);
         scheduleAt(intuniform(0, 1000) / 1000.0, nodeAnnounce);
@@ -142,15 +143,18 @@ void LoRaAloha::finish()
 
 void LoRaAloha::configureNetworkInterface()
 {
-    // data rate
     networkInterface->setDatarate(bitrate);
     networkInterface->setMacAddress(address);
 
-    // capabilities
     networkInterface->setMtu(std::numeric_limits<int>::quiet_NaN());
     networkInterface->setMulticast(true);
     networkInterface->setBroadcast(true);
     networkInterface->setPointToPoint(false);
+}
+
+queueing::IPassivePacketSource* LoRaAloha::getProvider(cGate *gate)
+{
+    return (gate->getId() == upperLayerInGateId) ? txQueue.get() : nullptr;
 }
 
 /****************************************************************
@@ -188,11 +192,6 @@ void LoRaAloha::handleLowerPacket(Packet *msg)
         EV << "Received MSG while not in RECEIVING state" << endl;
         delete msg;
     }
-}
-
-queueing::IPassivePacketSource* LoRaAloha::getProvider(cGate *gate)
-{
-    return (gate->getId() == upperLayerInGateId) ? txQueue.get() : nullptr;
 }
 
 void LoRaAloha::handleCanPullPacketChanged(cGate *gate)
@@ -357,8 +356,12 @@ void LoRaAloha::handlePacket(Packet *packet)
 
             if (isMissionMsg)
                 incompleteMissionPktList.removePacketById(missionId);
-            else
+            else {
                 incompleteNeighbourPktList.removePacketById(messageId);
+                simtime_t time = timeOfLastTrajectory.calcAgeOfInformation(source, simTime());
+                emit(timeOfLastTrajectorySignal, time);
+                timeOfLastTrajectory.addTime(source, simTime());
+            }
 
         }
         delete fragmentPayload;
@@ -476,7 +479,7 @@ void LoRaAloha::sendDataFrame()
 
     auto typeTag = frameToSend->getTag<MessageInfoTag>();
     if (!typeTag->isNeighbourMsg()) {
-        emit(sentMissionId, typeTag->getMissionId());
+        emit(missionIdFragmentSent, typeTag->getMissionId());
     }
 }
 

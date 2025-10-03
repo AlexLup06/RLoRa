@@ -32,6 +32,7 @@
 
 #include "../helpers/CustomPacketQueue.h"
 #include "../helpers/IncompletePacketList.h"
+#include "../helpers/TimeOfLastTrajectory.h"
 
 using namespace inet;
 using namespace physicallayer;
@@ -64,15 +65,17 @@ protected:
     simtime_t measurementInterval = 1.0;  // 1 second
     long bytesReceivedInInterval = 0;
     long effectiveBytesReceivedInInterval = 0;
-    cMessage *throughputTimer = nullptr;
-    simsignal_t throughputSignal;
+
     simsignal_t effectiveThroughputSignal;
     simsignal_t timeInQueue;
-    simsignal_t sentMissionId;
+    simsignal_t missionIdFragmentSent;
     simsignal_t receivedMissionId;
+    simsignal_t throughputSignal;
+    simsignal_t timeOfLastTrajectorySignal;
 
     map<int, SimTime> idToAddedTimeMap;
 
+    cMessage *throughputTimer = nullptr;
     cMessage *mediumStateChange = nullptr;
     cMessage *droppedPacket = nullptr;
     cMessage *endTransmission = nullptr;
@@ -86,6 +89,7 @@ protected:
     IncompletePacketList incompleteNeighbourPktList;
     CustomPacketQueue packetQueue;
     LoRaRadio *loRaRadio;
+    TimeOfLastTrajectory timeOfLastTrajectory;
 
 public:
     /**

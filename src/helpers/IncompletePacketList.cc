@@ -139,7 +139,7 @@ bool IncompletePacketList::isNewIdLower(int sourceId, int newId) const
     if (it == latestIds_.end()) {
         return false; // No messageId yet, so it's considered "larger"
     }
-    return newId > it->second;
+    return newId < it->second;
 }
 
 bool IncompletePacketList::isNewIdSame(int sourceId, int newId) const
@@ -148,7 +148,7 @@ bool IncompletePacketList::isNewIdSame(int sourceId, int newId) const
     if (it == latestIds_.end()) {
         return false; // No messageId yet, so it's considered "larger"
     }
-    return newId > it->second;
+    return newId == it->second;
 }
 
 bool IncompletePacketList::isNewIdHigher(int sourceId, int newId) const

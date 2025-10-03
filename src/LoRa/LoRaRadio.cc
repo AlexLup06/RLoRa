@@ -376,7 +376,6 @@ void LoRaRadio::startReception(cMessage *timer, IRadioSignal::SignalPart part)
     check_and_cast<RadioMedium*>(medium.get())->emit(IRadioMedium::signalArrivalStartedSignal, check_and_cast<const cObject*>(reception));
 }
 
-
 void LoRaRadio::continueReception(cMessage *timer)
 {
 
@@ -442,13 +441,23 @@ void LoRaRadio::endReception(cMessage *timer)
 
         auto tranmissionPacket = transmission->getPacket();
         auto infoTag = tranmissionPacket->getTag<MessageInfoTag>();
-        bool isCollided = isReceptionPossible && !isReceptionAttempted;
+//        bool isCollided = isReceptionPossible && !isReceptionAttempted;
 
-        if (!isCollided) {
+        if (isReceptionSuccessful) {
             if (infoTag->getHasUsefulData()) {
+                EV << "RECEPTION IS SUCCESSFULL WITH and we have useful data with: " << macFrame << endl;
                 DataLogger::getInstance()->logEffectiveBytesReceived(infoTag->getPayloadSize());
             }
             DataLogger::getInstance()->logBytesReceived(tranmissionPacket->getByteLength());
+        }
+
+        int received = -1;
+        if (isReceptionAttempted && isReceptionPossible) {
+            received = 1;
+        }
+
+        if (infoTag->getHasUsefulData()) {
+            emit(receivedId, received * tranmissionPacket->getId());
         }
 
         // We define Bytes sent as all the possible nodes that are in range to receive the packet. So if a sends 10 bytes to b and c we have 20 bytes sent
@@ -469,7 +478,7 @@ void LoRaRadio::endReception(cMessage *timer)
         emit(receptionEndedSignal, check_and_cast<const cObject*>(reception));
 
     }
-    else{
+    else {
         EV_INFO << "Reception ended: \x1b[1mignoring\x1b[0m " << (IWirelessSignal*) signal << " " << IRadioSignal::getSignalPartName(part) << " as " << reception << endl;
     }
     updateTransceiverState();
@@ -517,18 +526,15 @@ void LoRaRadio::endReception(cMessage *timer)
 
 void LoRaRadio::abortReception(cMessage *timer)
 {
-    NarrowbandRadioBase::abortReception(timer);
-    /*  auto radioFrame = static_cast<Signal *>(timer->getControlInfo());
-     auto part = (IRadioSignal::SignalPart)timer->getKind();
-     auto reception = radioFrame->getReception();
-     EV_INFO << "Reception aborted: for " << (ISignal *)radioFrame << " " << IRadioSignal::getSignalPartName(part) << " as " << reception << endl;
-     if (timer == receptionTimer)
-     {
-     receptionTimer = nullptr;
-     }
-     updateTransceiverState();
-     updateTransceiverPart();
-     */
+    //    auto signal = static_cast<WirelessSignal*>(timer->getControlInfo());
+    //    auto part = (IRadioSignal::SignalPart) timer->getKind();
+    //    auto reception = signal->getReception();
+    //    EV_INFO << "Reception \x1b[1maborted\x1b[0m: for " << (IWirelessSignal*) signal << " " << IRadioSignal::getSignalPartName(part) << " as " << reception << endl;
+    EV << "Reception aborted" << endl;
+    if (timer == receptionTimer)
+        receptionTimer = nullptr;
+    updateTransceiverState();
+    updateTransceiverPart();
 }
 
 void LoRaRadio::captureReception(cMessage *timer)

@@ -22,6 +22,7 @@
 
 #include "../helpers/CustomPacketQueue.h"
 #include "../helpers/IncompletePacketList.h"
+#include "../helpers/TimeOfLastTrajectory.h"
 
 namespace rlora {
 
@@ -36,6 +37,8 @@ protected:
     IncompletePacketList incompleteMissionPktList;
     IncompletePacketList incompleteNeighbourPktList;
     CustomPacketQueue packetQueue;
+    TimeOfLastTrajectory timeOfLastTrajectory;
+    map<int, SimTime> idToAddedTimeMap;
 
     cMessage *nodeAnnounce = nullptr;
     cMessage *transmitSwitchDone = nullptr;
@@ -58,10 +61,9 @@ protected:
     simsignal_t throughputSignal;
     simsignal_t effectiveThroughputSignal;
     simsignal_t timeInQueue;
-    simsignal_t sentMissionId;
+    simsignal_t missionIdFragmentSent;
     simsignal_t receivedMissionId;
-
-    map<int, SimTime> idToAddedTimeMap;
+    simsignal_t timeOfLastTrajectorySignal;
 
     enum State
     {

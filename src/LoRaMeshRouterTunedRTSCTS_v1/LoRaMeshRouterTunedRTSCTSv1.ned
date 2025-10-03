@@ -13,12 +13,12 @@
 // along with this program.  If not, see http://www.gnu.org/licenses/.
 // 
 
-package rlora.LoRaMeshRouterRTSCTS;
+package rlora.LoRaMeshRouterTunedRTSCTS_v1;
 
 import inet.linklayer.base.MacProtocolBase;
 import inet.linklayer.contract.IMacProtocol;
 
-module LoRaMeshRouterRTSCTS extends MacProtocolBase like IMacProtocol
+module LoRaMeshRouterTunedRTSCTSv1 extends MacProtocolBase like IMacProtocol
 {
     parameters:
         string radioModule = default("^.radio"); // The path to the Radio module 
@@ -26,12 +26,14 @@ module LoRaMeshRouterRTSCTS extends MacProtocolBase like IMacProtocol
         double bitrate @unit(bps) = 250bps; // 802.15.4-2006 - IEEE Standard for Information technology
 
         @statistic[timeInQueue](source=timeInQueue; record=vector; interpolationmode=none);
+        @statistic[timeOfLastTrajectory](source=timeOfLastTrajectorySignal; record=vector; interpolationmode=none);
         @statistic[throughputBps](source=throughputBps; record=vector; interpolationmode=none; unit=Bps);
         @statistic[effectiveThroughputBps](source=effectiveThroughputBps; record=vector; interpolationmode=none; unit=Bps);
-        @statistic[sentMissionId](source=sentMissionId; record=vector; interpolationmode=none; unit=Bps);
+        @statistic[missionIdRtsSent](source=missionIdRtsSent; record=vector; interpolationmode=none; unit=Bps);
+        @statistic[missionIdFragmentSent](source=missionIdFragmentSent; record=vector; interpolationmode=none; unit=Bps);
         @statistic[receivedMissionId](source=receivedMissionId; record=vector; interpolationmode=none; unit=Bps);
 
-        @class(LoRaMeshRouterRTSCTS);
+        @class(LoRaMeshRouterTunedRTSCTSv1);
     gates:
         input upperMgmtIn;
         output upperMgmtOut;

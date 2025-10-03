@@ -13,8 +13,8 @@
 // along with this program.  If not, see http://www.gnu.org/licenses/.
 // 
 
-#ifndef LORAMESHROUTERRTSCTS_LORAMESHROUTERRTSCTS_H_
-#define LORAMESHROUTERRTSCTS_LORAMESHROUTERRTSCTS_H_
+#ifndef LORAMESHROUTERRTSCTS_V1_LORAMESHROUTERRTSCTSV1_H_
+#define LORAMESHROUTERRTSCTS_V1_LORAMESHROUTERRTSCTSV1_H_
 
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IRadio.h"
 #include "inet/linklayer/contract/IMacProtocol.h"
@@ -32,6 +32,9 @@
 
 #include "../helpers/CustomPacketQueue.h"
 #include "../helpers/IncompletePacketList.h"
+#include "../helpers/MissionIdTracker.h"
+#include "../helpers/TimeOfLastTrajectory.h"
+
 
 using namespace inet;
 using namespace physicallayer;
@@ -42,7 +45,7 @@ namespace rlora {
  * Based on CSMA class
  */
 
-class LoRaMeshRouterRTSCTS : public MacProtocolBase, public IMacProtocol, public queueing::IActivePacketSink
+class LoRaMeshRouterRTSCTSv1 : public MacProtocolBase, public IMacProtocol, public queueing::IActivePacketSink
 {
 
 protected:
@@ -52,7 +55,7 @@ protected:
 
     enum State
     {
-        SWITCHING, DEFER, BACKOFF, SEND_RTS, WAIT_CTS, TRANSMITING, SEND_CTS, LISTENING, RECEIVING, CW_CTS, AWAIT_TRANSMISSION
+        SWITCHING, DEFER, BACKOFF, SEND_RTS, WAIT_CTS, TRANSMITING, SEND_CTS, LISTENING, RECEIVING, CW_CTS, AWAIT_TRANSMISSION, READY_TO_SEND
     };
 
     IRadio *radio = nullptr;
@@ -64,8 +67,10 @@ protected:
     simsignal_t throughputSignal;
     simsignal_t effectiveThroughputSignal;
     simsignal_t timeInQueue;
-    simsignal_t sentMissionId;
+    simsignal_t missionIdFragmentSent;
+    simsignal_t missionIdRtsSent;
     simsignal_t receivedMissionId;
+    simsignal_t timeOfLastTrajectorySignal;
 
     simtime_t measurementInterval = 1.0;
     simtime_t backoffPeriod = -1;
@@ -76,8 +81,8 @@ protected:
     int cwCTS = 16;
     int cwBackoff = 8;
 
-    long bytesReceivedInInterval = 0;
-    long effectiveBytesReceivedInInterval = 0;
+    int bytesReceivedInInterval = 0;
+    int effectiveBytesReceivedInInterval = 0;
     int sizeOfFragment_CTSData = -1;
     int sourceOfRTS_CTSData = -1;
     int rtsSource = -1;
@@ -98,19 +103,24 @@ protected:
     cMessage *throughputTimer = nullptr;
     cMessage *ctsCWTimeout = nullptr;
     cMessage *moreMessagesToSend = nullptr;
+    cMessage *transmissionEndTimeout = nullptr;
+    cMessage *shortWait = nullptr;
 
     IncompletePacketList incompleteMissionPktList;
     IncompletePacketList incompleteNeighbourPktList;
     CustomPacketQueue packetQueue;
     LoRaRadio *loRaRadio;
     map<int, SimTime> idToAddedTimeMap;
+    MissionIdTracker missionIdRtsSentTracker;
+    MissionIdTracker missionIdFragmentSentTracker;
+    TimeOfLastTrajectory timeOfLastTrajectory;
 
 public:
     /**
      * @name Construction functions
      */
     //@{
-    virtual ~LoRaMeshRouterRTSCTS();
+    virtual ~LoRaMeshRouterRTSCTSv1();
     //@}
     virtual MacAddress getAddress();
     virtual queueing::IPassivePacketSource* getProvider(cGate *gate) override;
@@ -202,6 +212,8 @@ protected:
     Packet* createContinuousHeader(int messageId, int source, int payloadSize, bool retransmit);
 
     bool isOurCTS(cMessage *msg);
+    bool isOtherCTS(cMessage *msg);
+    bool isRTS(cMessage *msg);
     bool isCTSForSameRTSSource(cMessage *msg);
     bool isPacketFromRTSSource(cMessage *msg);
     bool isInvalidCTSCWPeriod();
@@ -215,4 +227,4 @@ protected:
 
 } // namespace rlora
 
-#endif /* LORAMESHROUTERRTSCTS_LORAMESHROUTERRTSCTS_H_ */
+#endif /* LORAMESHROUTERRTSCTS_V1_LORAMESHROUTERRTSCTSV1_H_ */
