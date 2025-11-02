@@ -208,11 +208,18 @@ void LoRaMeshRouterTunedRTSCTSv1::handleWithFsm(cMessage *msg)
                 msg == mediumStateChange|| msg==shortWait,
                 LISTENING,
         );
+        FSMA_Event_Transition(we - got - rts - now-- send - cts,
+                msg == initiateCTS && isFreeToSend(),
+                CW_CTS, );
     }
 
     FSMA_State(LISTENING)
     {
         FSMA_Enter(EV<<"Switched To LISTENING"<<endl;);
+        FSMA_Event_Transition(we-got-rts-now--send-cts,
+                msg==initiateCTS && isFreeToSend(),
+                CW_CTS,
+        );
         FSMA_Event_Transition(able-to-receive,
                 isReceiving(),
                 RECEIVING,
@@ -224,10 +231,6 @@ void LoRaMeshRouterTunedRTSCTSv1::handleWithFsm(cMessage *msg)
         FSMA_Event_Transition(something-to-send-medium-free-start-backoff,
                 currentTxFrame != nullptr && isMediumFree() && isFreeToSend(),
                 BACKOFF,
-        );
-        FSMA_Event_Transition(we-got-rts-now--send-cts,
-                msg==initiateCTS && isFreeToSend(),
-                CW_CTS,
         );
     }
     FSMA_State(DEFER)
@@ -431,7 +434,7 @@ void LoRaMeshRouterTunedRTSCTSv1::handlePacket(Packet *packet)
         // we only care about this message if it is a newer Mission Message. If it is an older one then we do not care.
         // For continuous Header we care, because we are able to get fragments in different sequence and we only want
         // to get the ones which we still not have gotten
-        if (isMissionMsg && !incompleteMissionPktList.isNewIdHigher(source, messageId)) {
+        if (isMissionMsg && !incompleteMissionPktList.isNewIdHigher(source, missionId)) {
             delete packet;
             return;
         }
@@ -471,15 +474,11 @@ void LoRaMeshRouterTunedRTSCTSv1::handlePacket(Packet *packet)
         int messageId = msg->getMessageId();
         int source = msg->getSource();
         int missionId = msg->getMissionId();
-        bool isMissionMsg = msg->getRetransmit();
 
-        if (!isMissionMsg && !incompleteNeighbourPktList.isNewIdHigher(source, messageId)) {
+        if (!incompleteNeighbourPktList.isNewIdHigher(source, messageId)) {
             delete packet;
-            return;
-        }
+            EV << "Id not higher!!" << endl;
 
-        if (isMissionMsg && !incompleteMissionPktList.isNewIdHigher(source, missionId)) {
-            delete packet;
             return;
         }
 
@@ -493,14 +492,8 @@ void LoRaMeshRouterTunedRTSCTSv1::handlePacket(Packet *packet)
         incompletePacket.corrupted = false;
         incompletePacket.retransmit = msg->getRetransmit();
 
-        if (isMissionMsg) {
-            incompleteMissionPktList.addPacket(incompletePacket);
-            incompleteMissionPktList.updatePacketId(source, missionId);
-        }
-        else {
-            incompleteNeighbourPktList.addPacket(incompletePacket);
-            incompleteNeighbourPktList.updatePacketId(source, messageId);
-        }
+        incompleteNeighbourPktList.addPacket(incompletePacket);
+        incompleteNeighbourPktList.updatePacketId(source, messageId);
 
         // wir senden schon mit dem ersten packet daten
         BroadcastFragment *fragmentPayload = new BroadcastFragment();
@@ -512,26 +505,25 @@ void LoRaMeshRouterTunedRTSCTSv1::handlePacket(Packet *packet)
         fragmentPayload->setFragmentId(0);
 
         Result result;
-        if (isMissionMsg)
-            result = incompleteMissionPktList.addToIncompletePacket(fragmentPayload);
-        else
-            result = incompleteNeighbourPktList.addToIncompletePacket(fragmentPayload);
+        result = incompleteNeighbourPktList.addToIncompletePacket(fragmentPayload);
 
         if (result.isComplete) {
+            EV << "Neighbour message complete!" << endl;
             if (result.sendUp) {
                 cMessage *readyMsg = new cMessage("Ready");
                 sendUp(readyMsg);
                 retransmitPacket(result.completePacket);
             }
 
-            if (isMissionMsg)
-                incompleteMissionPktList.removePacketById(missionId);
-            else {
-                incompleteNeighbourPktList.removePacketById(messageId);
-                simtime_t time = timeOfLastTrajectory.calcAgeOfInformation(source, simTime());
-                emit(timeOfLastTrajectorySignal, time);
-                timeOfLastTrajectory.addTime(source, simTime());
-            }
+            incompleteNeighbourPktList.removePacketById(messageId);
+            simtime_t time = timeOfLastTrajectory.calcAgeOfInformation(source, simTime());
+            emit(timeOfLastTrajectorySignal, time);
+            timeOfLastTrajectory.addTime(source, simTime());
+
+        }
+        else {
+
+            EV << "Neighbour message NOT complete!" << endl;
 
         }
         delete fragmentPayload;
@@ -561,7 +553,8 @@ void LoRaMeshRouterTunedRTSCTSv1::handlePacket(Packet *packet)
         int messageId = msg->getMessageId();
         int source = msg->getSource();
         int missionId = msg->getMissionId();
-        bool isMissionMsg = missionId > 0;
+        auto typeTag = messageFrame->getTag<MessageInfoTag>();
+        bool isMissionMsg = !typeTag->isNeighbourMsg();
 
         // We do check if we have started this packet with a header in the function
         Result result;
@@ -966,10 +959,11 @@ void LoRaMeshRouterTunedRTSCTSv1::createBroadcastPacket(int payloadSize, int mis
 
     int i = 0;
     while (payloadSize > 0) {
-
+        bool hasRegularHeader = true;
         if (i > 0) {
             Packet *continuousHeader = createContinuousHeader(missionId, source, payloadSize, retransmit);
             packetQueue.enqueuePacket(continuousHeader);
+            hasRegularHeader = false;
         }
 
         auto fragmentPacket = new Packet("BroadcastFragmentPkt");
@@ -1004,6 +998,7 @@ void LoRaMeshRouterTunedRTSCTSv1::createBroadcastPacket(int payloadSize, int mis
         messageInfoTag->setHasUsefulData(true);
         messageInfoTag->setPayloadSize(currentPayloadSize);
         messageInfoTag->setWithRTS(retransmit);
+        messageInfoTag->setHasRegularHeader(hasRegularHeader);
 
         encapsulate(fragmentPacket);
 
@@ -1050,49 +1045,6 @@ void LoRaMeshRouterTunedRTSCTSv1::createNeighbourPacket(int payloadSize, int sou
     bool trackQueueTime = packetQueue.enqueuePacket(headerPaket);
     if (trackQueueTime) {
         idToAddedTimeMap[headerPaket->getId()] = simTime();
-    }
-
-    // INFO: das nullte packet ist das was im leader direkt mitgeschickt wird
-    int i = 1;
-    while (payloadSize > 0) {
-        auto fragmentPacket = new Packet("BroadcastFragmentPkt");
-        auto fragmentPayload = makeShared<BroadcastFragment>();
-
-        int currentPayloadSize = 0;
-        if (payloadSize + BROADCAST_FRAGMENT_META_SIZE > 255) {
-            currentPayloadSize = 255 - BROADCAST_FRAGMENT_META_SIZE;
-            fragmentPayload->setChunkLength(B(255));
-            fragmentPayload->setPayloadSize(currentPayloadSize);
-            payloadSize = payloadSize - currentPayloadSize;
-        }
-        else {
-            currentPayloadSize = payloadSize;
-            fragmentPayload->setChunkLength(B(currentPayloadSize + BROADCAST_FRAGMENT_META_SIZE));
-            fragmentPayload->setPayloadSize(currentPayloadSize);
-            payloadSize = 0;
-        }
-
-        fragmentPayload->setMessageId(messageId);
-        fragmentPayload->setMissionId(-1);
-        fragmentPayload->setSource(source);
-        fragmentPayload->setFragmentId(i++);
-        fragmentPacket->insertAtBack(fragmentPayload);
-        fragmentPacket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
-
-        auto messageInfoTag = fragmentPacket->addTagIfAbsent<MessageInfoTag>();
-        messageInfoTag->setIsNeighbourMsg(true);
-        messageInfoTag->setMissionId(-1);
-        messageInfoTag->setIsHeader(false);
-        messageInfoTag->setHopId(nodeId);
-        messageInfoTag->setHasUsefulData(true);
-        messageInfoTag->setPayloadSize(currentPayloadSize);
-        messageInfoTag->setWithRTS(false);
-
-        encapsulate(fragmentPacket);
-        packetQueue.enqueuePacket(fragmentPacket);
-        if (trackQueueTime) {
-            idToAddedTimeMap[fragmentPacket->getId()] = simTime();
-        }
     }
 }
 

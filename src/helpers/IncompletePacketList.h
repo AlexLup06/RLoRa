@@ -33,7 +33,6 @@ using namespace std;
 
 struct FragmentedPacket
 {
-    string id = generate_uuid();
     int messageId = -1;
     int missionId = -1;
     int size = -1;
@@ -77,40 +76,8 @@ private:
     std::vector<FragmentedPacket> packets_;
     std::unordered_map<int, int> latestIds_;
     bool isMissionList_;
-
 };
 
 } // namespace rlora
 
 #endif // HELPERS_INCOMPLETEPACKETLIST_H_
-
-//    std::vector<FragmentedPacket> missionPkts_;
-//    std::vector<FragmentedPacket> neighbourPkts_;
-//    std::unordered_map<int, int> latestMessageIds_;
-//    std::unordered_map<int, int> latestMissionIds_;
-
-//    FragmentedPacket* getByMissionPktId(int missionId);
-//    void removeMissionPktById(int missionId);
-//    void addMissionPkt(const FragmentedPacket &packet);
-//    void removeMissionPktBySource(int source);
-//    bool isMissionPktFromSameHop(int missionId);
-//    Result addToIncompleteMissionPkt(const BroadcastFragment *fragment);
-//
-//    FragmentedPacket* getByNeighboutPktId(int messageId);
-//    void removeNeighbourPktById(int messageId);
-//    void addNeighbourPkt(const FragmentedPacket &packet);
-//    void removeNeighbourPktBySource(int source);
-//    bool isNeighbourPktFromSameHop(int messageId);
-//    Result addToIncompleteNeighbourPkt(const BroadcastFragment *fragment);
-//
-//    void updateMessageId(int sourceId, int newMessageId);
-//    void updateMissionId(int sourceId, int newMissionId);
-//
-//    bool isNewMissionIdLower(int sourceId, int newMissionId) const;
-//    bool isNewMissionIdSame(int sourceId, int newMissionId) const;
-//    bool isNewMissionIdHigher(int sourceId, int newMissionId) const;
-//
-//    bool isNewMessageIdLower(int sourceId, int newMessageId) const;
-//    bool isNewMessageIdSame(int sourceId, int newMessageId) const;
-//    bool isNewMessageIdHigher(int sourceId, int newMessageId) const;
-

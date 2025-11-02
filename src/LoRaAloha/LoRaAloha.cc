@@ -503,6 +503,8 @@ void LoRaAloha::retransmitPacket(FragmentedPacket fragmentedPacket)
     if (!fragmentedPacket.retransmit || fragmentedPacket.sourceNode == nodeId) {
         return;
     }
+
+    EV << "Retransmit Packet!" << endl;
     emit(receivedMissionId, fragmentedPacket.missionId);
     createBroadcastPacket(fragmentedPacket.size, fragmentedPacket.missionId, fragmentedPacket.sourceNode, fragmentedPacket.retransmit);
 }

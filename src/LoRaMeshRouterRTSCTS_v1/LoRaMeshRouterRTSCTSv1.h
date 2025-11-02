@@ -35,7 +35,6 @@
 #include "../helpers/MissionIdTracker.h"
 #include "../helpers/TimeOfLastTrajectory.h"
 
-
 using namespace inet;
 using namespace physicallayer;
 
@@ -80,6 +79,7 @@ protected:
     simtime_t ctsFS = 0.018; // timeOnAir of Header + 0.0005 puffer
     int cwCTS = 16;
     int cwBackoff = 8;
+    int remainderCtsCw = 0;
 
     int bytesReceivedInInterval = 0;
     int effectiveBytesReceivedInInterval = 0;

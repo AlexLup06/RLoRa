@@ -53,6 +53,9 @@ void IncompletePacketList::removePacketById(int id)
 void IncompletePacketList::addPacket(const FragmentedPacket &packet)
 {
     removePacketBySource(packet.sourceNode);
+    if (packet.retransmit)
+        EV << "Creating packet with id: " << packet.missionId << endl;
+
     packets_.push_back(packet);
 }
 
@@ -77,8 +80,12 @@ Result IncompletePacketList::addToIncompletePacket(const BroadcastFragment *pack
     else
         incompletePacket = getPacketById(packet->getMessageId());
 
+    if (isMissionList_)
+        EV << "Adding packet with id: " << packet->getMissionId() << endl;
+
     Result result;
     if (incompletePacket == nullptr) {
+        EV << "Incomplete fragment does not exist" << endl;
         result.isComplete = false;
         result.sendUp = false;
         result.isRelevant = false;
@@ -88,6 +95,7 @@ Result IncompletePacketList::addToIncompletePacket(const BroadcastFragment *pack
 
     int fragmentId = packet->getFragmentId();
     if (incompletePacket->fragments[fragmentId]) { // we already got this fragment
+        EV << "Already got this fragment" << endl;
         result.isComplete = false;
         result.sendUp = false;
         result.waitTime = -1;
@@ -117,6 +125,7 @@ Result IncompletePacketList::addToIncompletePacket(const BroadcastFragment *pack
             return result;
         }
     }
+    EV << "Wrong sizes" << endl;
     result.isComplete = false;
     result.sendUp = false;
     result.waitTime = waitTime;

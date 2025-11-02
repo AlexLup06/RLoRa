@@ -7,4 +7,5 @@ scripts/venv
 data/**/*.txt
 data/**/*.json
 Makefile
+simulations/dynamicParams.ini
 src/Makefile

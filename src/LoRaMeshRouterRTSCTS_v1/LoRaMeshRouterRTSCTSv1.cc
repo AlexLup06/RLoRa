@@ -3,15 +3,15 @@
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// 
+//
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU Lesser General Public License for more details.
-// 
+//
 // You should have received a copy of the GNU Lesser General Public License
 // along with this program.  If not, see http://www.gnu.org/licenses/.
-// 
+//
 
 #include "LoRaMeshRouterRTSCTSv1.h"
 
@@ -69,7 +69,7 @@ void LoRaMeshRouterRTSCTSv1::initialize(int stage)
         txQueue = getQueue(gate(upperLayerInGateId));
         packetQueue = CustomPacketQueue();
 
-        nodeId = intuniform(0, 16777216); //16^6 -1
+        nodeId = intuniform(0, 16777216); // 16^6 -1
 
         mediumStateChange = new cMessage("mediumStateChange");
         droppedPacket = new cMessage("Dropped Packet");
@@ -191,10 +191,10 @@ void LoRaMeshRouterRTSCTSv1::handleWithFsm(cMessage *msg)
 
     if (msg == throughputTimer) {
         // Timer triggered
-        emit(throughputSignal, bytesReceivedInInterval);  // bytes per interval
-        emit(effectiveThroughputSignal, effectiveBytesReceivedInInterval);  // bytes per interval
-        bytesReceivedInInterval = 0;  // reset counter
-        effectiveBytesReceivedInInterval = 0;  // reset counter
+        emit(throughputSignal, bytesReceivedInInterval);                   // bytes per interval
+        emit(effectiveThroughputSignal, effectiveBytesReceivedInInterval); // bytes per interval
+        bytesReceivedInInterval = 0;                                       // reset counter
+        effectiveBytesReceivedInInterval = 0;                              // reset counter
         scheduleAt(simTime() + measurementInterval, throughputTimer);
         return;
     }
@@ -203,203 +203,173 @@ void LoRaMeshRouterRTSCTSv1::handleWithFsm(cMessage *msg)
 
     FSMA_State(SWITCHING)
     {
-        FSMA_Enter(turnOnReceiver();EV<<"Switched To SWITCHING"<<endl;);
-        FSMA_Event_Transition(able-to-listen,
-                msg == mediumStateChange|| msg==shortWait,
-                LISTENING,
-        );
-        FSMA_Event_Transition(we-got-rts-now--send-cts,
-                msg==initiateCTS && isFreeToSend(),
-                CW_CTS,
-        );
+        FSMA_Enter(turnOnReceiver(); EV << "Switched To SWITCHING" << endl;);
+        FSMA_Event_Transition(able - to - listen,
+                msg == mediumStateChange || msg == shortWait,
+                LISTENING, );
+        FSMA_Event_Transition(we - got - rts - now-- send - cts,
+                msg == initiateCTS && isFreeToSend(),
+                CW_CTS, );
     }
 
     FSMA_State(LISTENING)
     {
-        FSMA_Enter(EV<<"Switched To LISTENING"<<endl;);
-        FSMA_Event_Transition(able-to-receive,
+        FSMA_Enter(EV << "Switched To LISTENING" << endl;);
+        FSMA_Event_Transition(able - to - receive,
                 isReceiving(),
-                RECEIVING,
-        );
-        FSMA_Event_Transition(medium-busy-waiting-it-out,
+                RECEIVING, );
+        FSMA_Event_Transition(we - got - rts - now-- send - cts,
+                msg == initiateCTS && isFreeToSend(),
+                CW_CTS, );
+        FSMA_Event_Transition(medium - busy - waiting - it - out,
                 !isMediumFree(),
-                DEFER,
-        );
-        FSMA_Event_Transition(something-to-send-medium-free-start-backoff,
+                DEFER, );
+        FSMA_Event_Transition(something - to - send - medium - free - start - backoff,
                 currentTxFrame != nullptr && isMediumFree() && isFreeToSend(),
-                BACKOFF,
-        );
-        FSMA_Event_Transition(we-got-rts-now--send-cts,
-                msg==initiateCTS && isFreeToSend(),
-                CW_CTS,
-        );
+                BACKOFF, );
     }
     FSMA_State(DEFER)
     {
-        FSMA_Enter(EV<<"Switched To DEFER"<<endl;);
-        FSMA_Event_Transition(something-to-send-medium-free-again,
+        FSMA_Enter(EV << "Switched To DEFER" << endl;);
+        FSMA_Event_Transition(something - to - send - medium - free - again,
                 currentTxFrame != nullptr && isMediumFree() && isFreeToSend(),
-                BACKOFF,
-        );
-        FSMA_Event_Transition(nothing-to-send-medium-free-again,
+                BACKOFF, );
+        FSMA_Event_Transition(nothing - to - send - medium - free - again,
                 currentTxFrame == nullptr && isMediumFree(),
-                LISTENING,
-        );
-        FSMA_Event_Transition(able-to-receive-again,
+                LISTENING, );
+        FSMA_Event_Transition(able - to - receive - again,
                 isReceiving(),
-                RECEIVING,
-        );
-        FSMA_Event_Transition(we-got-rts-now--send-cts,
-                msg==initiateCTS && isFreeToSend(),
-                CW_CTS,
-        );
+                RECEIVING, );
     }
     FSMA_State(BACKOFF)
     {
-        FSMA_Enter(scheduleBackoffTimer();EV<<"Switched To BACKOFF"<<endl;);
-        FSMA_Event_Transition(backoff-finished-send-rts,
+        FSMA_Enter(scheduleBackoffTimer(); EV << "Switched To BACKOFF" << endl;);
+        FSMA_Event_Transition(backoff - finished - send - rts,
                 msg == endBackoff && withRTS(),
                 SEND_RTS,
-                invalidateBackoffPeriod();
-        );
-        FSMA_Event_Transition(backoff-finished-message-without-rts-only-nodeannounce,
+                invalidateBackoffPeriod(););
+        FSMA_Event_Transition(backoff - finished - message - without - rts - only - nodeannounce,
                 msg == endBackoff && !withRTS(),
                 TRANSMITING,
-                invalidateBackoffPeriod();
-        );
-        FSMA_Event_Transition(receiving-msg-cancle-backoff-listen-now,
+                invalidateBackoffPeriod(););
+        FSMA_Event_Transition(receiving - msg - cancle - backoff - listen - now,
                 isReceiving(),
                 RECEIVING,
                 cancelBackoffTimer();
-                decreaseBackoffPeriod();
-        );
-        FSMA_Event_Transition(we-got-rts-now--send-cts,
-                msg==initiateCTS && isFreeToSend(),
+                decreaseBackoffPeriod(););
+        FSMA_Event_Transition(we - got - rts - now-- send - cts,
+                msg == initiateCTS && isFreeToSend(),
                 CW_CTS,
                 cancelBackoffTimer();
-                decreaseBackoffPeriod();
-        );
+                decreaseBackoffPeriod(););
     }
     FSMA_State(SEND_RTS)
     {
-        FSMA_Enter(turnOnTransmitter();EV<<"Switched To SEND_RTS"<<endl;);
-        FSMA_Event_Transition(transmitter-is-ready-to-send,
+        FSMA_Enter(turnOnTransmitter(); EV << "Switched To SEND_RTS" << endl;);
+        FSMA_Event_Transition(transmitter - is - ready - to - send,
                 msg == transmitSwitchDone,
                 SEND_RTS,
-                sendRTS();
-        );
-        FSMA_Event_Transition(rts-was-sent-now-wait-cts,
+                sendRTS(););
+        FSMA_Event_Transition(rts - was - sent - now - wait - cts,
                 msg == endTransmission,
-                WAIT_CTS,
-        );
+                WAIT_CTS, );
     }
     FSMA_State(WAIT_CTS)
     {
-        FSMA_Enter(turnOnReceiver();EV<<"Switched To WAIT_CTS"<<endl;);
-        FSMA_Event_Transition(we-didnt-get-cts-go-back-to-listening,
+        FSMA_Enter(turnOnReceiver(); EV << "Switched To WAIT_CTS" << endl;);
+        FSMA_Event_Transition(we - didnt - get - cts - go - back - to - listening,
                 msg == CTSWaitTimeout,
                 SWITCHING,
                 handleCTSTimeout();
-                scheduleAfter(sifs,shortWait)
+                scheduleAfter(sifs, shortWait)
 
         );
-        FSMA_Event_Transition(Listening-Receiving,
+        FSMA_Event_Transition(Listening - Receiving,
                 isOurCTS(msg),
+                READY_TO_SEND,
+                handleCTS(pkt););
+    }
+    FSMA_State(READY_TO_SEND)
+    {
+        FSMA_Enter( EV << "Switched To READY_TO_SEND" << endl;);
+        FSMA_Event_Transition(we-didnt-get-cts-go-back-to-listening,
+                msg == CTSWaitTimeout,
                 TRANSMITING,
-                handleCTS(pkt);
         );
     }
-
     FSMA_State(TRANSMITING)
     {
-        FSMA_Enter(turnOnTransmitter();EV<<"Switched To TRANSMITING"<<endl;);
-        FSMA_Event_Transition(send-data-now,
+        FSMA_Enter(turnOnTransmitter(); EV << "Switched To TRANSMITING" << endl;);
+        FSMA_Event_Transition(send - data - now,
                 msg == transmitSwitchDone,
                 TRANSMITING,
-                sendDataFrame();
-        );
-        FSMA_Event_Transition(finished-transmission-turn-to-receiver,
+                sendDataFrame(););
+        FSMA_Event_Transition(finished - transmission - turn - to - receiver,
                 msg == endTransmission,
                 SWITCHING,
-                finishCurrentTransmission();
-        );
+                finishCurrentTransmission(););
     }
     FSMA_State(CW_CTS)
     {
-        FSMA_Enter(EV<<"Switched To CW_CTS"<<endl;scheduleCTSCWTimer(););
-        FSMA_Event_Transition(had-to-wait-cw-to-send-cts,
+        FSMA_Enter(EV << "Switched To CW_CTS" << endl; scheduleCTSCWTimer(););
+        FSMA_Event_Transition(had - to - wait - cw - to - send - cts,
                 msg == ctsCWTimeout && !isReceiving(),
                 SEND_CTS,
-                invalidateCTSCWPeriod();
-        );
-        FSMA_Event_Transition(got-cts-sent-to-same-source-as-we-want-to-send-to,
-                isCTSForSameRTSSource(msg),
-                AWAIT_TRANSMISSION,
-                invalidateCTSCWPeriod();
-                cancelCTSCWTimer();
-                scheduleAfter(sifs, transmissionStartTimeout);
-        );
-        FSMA_Event_Transition(got-packet-from-rts-source,
+                invalidateCTSCWPeriod(););
+        FSMA_Event_Transition(got - packet - from - rts - source,
                 isPacketFromRTSSource(msg),
                 SWITCHING,
                 invalidateCTSCWPeriod();
                 cancelCTSCWTimer();
                 handlePacket(pkt);
-                scheduleAfter(sifs,shortWait);
-        );
+                scheduleAfter(sifs, shortWait););
     }
     FSMA_State(SEND_CTS)
     {
-        FSMA_Enter(turnOnTransmitter();EV<<"Switched To SEND_CTS"<<endl;);
-        FSMA_Event_Transition(transmitter-on-now-send-cts,
+        FSMA_Enter(turnOnTransmitter(); EV << "Switched To SEND_CTS" << endl;);
+        FSMA_Event_Transition(transmitter - on - now - send - cts,
                 msg == transmitSwitchDone,
                 SEND_CTS,
-                sendCTS();
-        );
-        FSMA_Event_Transition(finished-cts-sending-turn-to-receiver,
+                sendCTS(););
+        FSMA_Event_Transition(finished - cts - sending - turn - to - receiver,
                 msg == endTransmission,
-                AWAIT_TRANSMISSION,
-        );
+                AWAIT_TRANSMISSION, );
     }
     FSMA_State(AWAIT_TRANSMISSION)
     {
-        FSMA_Enter(turnOnReceiver();EV<<"Switched To AWAIT_TRANSMISSION"<<endl;);
-        FSMA_Event_Transition(source-didnt-get-cts-just-go-back-to-regular-listening,
+        FSMA_Enter(turnOnReceiver(); EV << "Switched To AWAIT_TRANSMISSION" << endl;);
+        FSMA_Event_Transition(source - didnt - get - cts - just - go - back - to - regular - listening,
                 msg == transmissionStartTimeout && !isReceiving(),
                 SWITCHING,
                 clearRTSsource();
                 cancelEvent(transmissionEndTimeout);
-                scheduleAfter(sifs,shortWait);
-        );
-        FSMA_Event_Transition(received-packet-check-whether-from-rts-source-then-handle,
+                scheduleAfter(sifs, shortWait););
+        FSMA_Event_Transition(received - packet - check - whether - from - rts - source - then - handle,
                 isPacketFromRTSSource(msg),
                 SWITCHING,
                 handlePacket(pkt);
                 cancelEvent(transmissionStartTimeout);
                 cancelEvent(transmissionEndTimeout);
-                scheduleAfter(sifs,shortWait);
+                scheduleAfter(sifs, shortWait);
 
         );
         // if we dont do this, we will be stuck here if a node get a message from a node other than the one from rts. should rarely happen
-        FSMA_Event_Transition(got-some-random-message-just-remove-then-go-back-to-listening,
-                msg==transmissionEndTimeout,
+        FSMA_Event_Transition(got - some - random - message - just - remove - then - go - back - to - listening,
+                msg == transmissionEndTimeout,
                 SWITCHING,
-                scheduleAfter(sifs,shortWait);
-        );
+                scheduleAfter(sifs, shortWait););
     }
     FSMA_State(RECEIVING)
     {
-        FSMA_Enter(EV<<"Switched To RECEIVING"<<endl;);
-        FSMA_Event_Transition(received-message-handle-keep-listening,
+        FSMA_Enter(EV << "Switched To RECEIVING" << endl;);
+        FSMA_Event_Transition(received - message - handle - keep - listening,
                 isLowerMessage(msg),
                 SWITCHING,
                 handlePacket(pkt);
-                scheduleAfter(sifs,shortWait)
-        );
-        FSMA_Event_Transition(receive-below-sensitivity,
+                scheduleAfter(sifs, shortWait));
+        FSMA_Event_Transition(receive - below - sensitivity,
                 msg == droppedPacket,
-                LISTENING,
-        );
+                LISTENING, );
     }
 }
 
@@ -413,8 +383,7 @@ void LoRaMeshRouterRTSCTSv1::handleWithFsm(cMessage *msg)
             handleWithFsm(moreMessagesToSend);
         }
     }
-//    if (fsm.getState() == RECEIVING || fsm.getState() == WAIT_CTS || fsm.getState() == CW_CTS || fsm.getState() == AWAIT_TRANSMISSION) {
-
+    //    if (fsm.getState() == RECEIVING || fsm.getState() == WAIT_CTS || fsm.getState() == CW_CTS || fsm.getState() == AWAIT_TRANSMISSION) {
 }
 
 void LoRaMeshRouterRTSCTSv1::handlePacket(Packet *packet)
@@ -441,7 +410,7 @@ void LoRaMeshRouterRTSCTSv1::handlePacket(Packet *packet)
         // we only care about this message if it is a newer Mission Message. If it is an older one then we do not care.
         // For continuous Header we care, because we are able to get fragments in different sequence and we only want
         // to get the ones which we still not have gotten
-        if (isMissionMsg && !incompleteMissionPktList.isNewIdHigher(source, messageId)) {
+        if (isMissionMsg && !incompleteMissionPktList.isNewIdHigher(source, missionId)) {
             delete packet;
             return;
         }
@@ -497,7 +466,8 @@ void LoRaMeshRouterRTSCTSv1::handlePacket(Packet *packet)
         int messageId = msg->getMessageId();
         int source = msg->getSource();
         int missionId = msg->getMissionId();
-        bool isMissionMsg = missionId > 0;
+        auto typeTag = messageFrame->getTag<MessageInfoTag>();
+        bool isMissionMsg = !typeTag->isNeighbourMsg();
 
         // We do check if we have started this packet with a header in the function
         Result result;
@@ -506,6 +476,7 @@ void LoRaMeshRouterRTSCTSv1::handlePacket(Packet *packet)
         else
             result = incompleteNeighbourPktList.addToIncompletePacket(msg);
 
+        EV << "Got completed msg and it is mission: " << isMissionMsg << endl;
         if (result.isComplete) {
             if (result.sendUp) {
                 cMessage *readyMsg = new cMessage("Ready");
@@ -544,7 +515,7 @@ void LoRaMeshRouterRTSCTSv1::handleSelfMessage(cMessage *msg)
 void LoRaMeshRouterRTSCTSv1::handleUpperPacket(Packet *packet)
 {
     EV << "handleUpperPacket" << endl;
-// add header to queue
+    // add header to queue
     const auto &payload = packet->peekAtFront<LoRaRobotPacket>();
     bool isMission = payload->isMission();
     createBroadcastPacket(packet->getByteLength(), -1, -1, isMission);
@@ -655,7 +626,6 @@ void LoRaMeshRouterRTSCTSv1::sendDataFrame()
             {
                 emit(missionIdFragmentSent, missionId);
                 missionIdFragmentSentTracker.add(missionId);
-
             }
         }
     }
@@ -686,7 +656,7 @@ void LoRaMeshRouterRTSCTSv1::announceNodeId(int respond)
 void LoRaMeshRouterRTSCTSv1::retransmitPacket(FragmentedPacket fragmentedPacket)
 {
     EV << "retransmitPacket" << endl;
-// jedes feld muss gleich sein vom fragemntierten packet außer lastHop
+    // jedes feld muss gleich sein vom fragemntierten packet außer lastHop
     if (!fragmentedPacket.retransmit || fragmentedPacket.sourceNode == nodeId) {
         return;
     }
@@ -705,7 +675,7 @@ void LoRaMeshRouterRTSCTSv1::retransmitPacket(FragmentedPacket fragmentedPacket)
 void LoRaMeshRouterRTSCTSv1::handleCTS(Packet *pkt)
 {
     EV << "handleCTS" << endl;
-    cancelEvent(CTSWaitTimeout);
+    //cancelEvent(CTSWaitTimeout);
     delete pkt;
     EV << "END handleCTS" << endl;
 }
@@ -760,6 +730,8 @@ bool LoRaMeshRouterRTSCTSv1::isOurCTS(cMessage *msg)
         if (auto msg = dynamic_cast<const BroadcastCTS*>(chunk.get())) {
             EV << "We got CTS" << endl;
             if (msg->getHopId() == nodeId) {
+                EV << "It is our CTS!" << endl;
+
                 return true;
             }
         }
@@ -826,7 +798,8 @@ void LoRaMeshRouterRTSCTSv1::sendCTS()
     delete ctsPacket;
 
     // After we send CTS, we need to receive message within ctsFS + sifs otherwise we assume there will be no message
-    scheduleAfter(ctsFS + sifs, transmissionStartTimeout);
+    // above is slightly wrong. we need to wait for the full cwMac period
+    scheduleAfter(ctsFS + sifs + remainderCtsCw * ctsFS, transmissionStartTimeout);
     scheduleAfter(ctsFS + sifs + predictOngoingMsgTime(sizeOfFragment_CTSData), transmissionEndTimeout);
     sizeOfFragment_CTSData = -1;
     sourceOfRTS_CTSData = -1;
@@ -892,6 +865,7 @@ void LoRaMeshRouterRTSCTSv1::createBroadcastPacket(int payloadSize, int missionI
     if (missionId == -1) {
         missionId = headerPaket->getId();
     }
+
     int messageId = headerPaket->getId();
 
     bool trackQueueTime = packetQueue.enqueuePacket(headerPaket);
@@ -902,10 +876,11 @@ void LoRaMeshRouterRTSCTSv1::createBroadcastPacket(int payloadSize, int missionI
 
     int i = 0;
     while (payloadSize > 0) {
-
+        bool hasRegularHeader = true;
         if (i > 0) {
             Packet *continuousHeader = createContinuousHeader(missionId, source, payloadSize, retransmit);
             packetQueue.enqueuePacket(continuousHeader);
+            hasRegularHeader = false;
         }
 
         auto fragmentPacket = new Packet("BroadcastFragmentPkt");
@@ -939,6 +914,7 @@ void LoRaMeshRouterRTSCTSv1::createBroadcastPacket(int payloadSize, int missionI
         messageInfoTag->setHopId(nodeId);
         messageInfoTag->setHasUsefulData(true);
         messageInfoTag->setPayloadSize(currentPayloadSize);
+        messageInfoTag->setHasRegularHeader(hasRegularHeader);
 
         encapsulate(fragmentPacket);
 
@@ -1124,6 +1100,7 @@ void LoRaMeshRouterRTSCTSv1::generateCTSCWPeriod()
     int slots = intrand(cwCTS);
     EV << "slots: " << slots << endl;
     ctsCWPeriod = slots * ctsFS;
+    remainderCtsCw = cwCTS - slots - 1;
 }
 
 void LoRaMeshRouterRTSCTSv1::scheduleCTSCWTimer()
@@ -1162,7 +1139,7 @@ bool LoRaMeshRouterRTSCTSv1::isReceiving()
 
 void LoRaMeshRouterRTSCTSv1::turnOnReceiver()
 {
-// this makes receiverPart go to idle no matter what
+    // this makes receiverPart go to idle no matter what
     EV << "turnOnReceiver" << endl;
     LoRaRadio *loraRadio;
     loraRadio = check_and_cast<LoRaRadio*>(radio);
@@ -1170,7 +1147,7 @@ void LoRaMeshRouterRTSCTSv1::turnOnReceiver()
 }
 void LoRaMeshRouterRTSCTSv1::turnOnTransmitter()
 {
-// this makes receiverPart go to idle no matter what
+    // this makes receiverPart go to idle no matter what
     EV << "turnOnTransmitter" << endl;
     LoRaRadio *loraRadio;
     loraRadio = check_and_cast<LoRaRadio*>(radio);
