@@ -100,7 +100,7 @@ def modify_time_in_queue(exp):
 
         new_vectors.append({
             "value": values,
-            "mean": mean_val,
+            "mean": mean_val,c
             "variance": variance_val,
             "count": count
         })
@@ -171,7 +171,8 @@ def modify_effective_throughput(exp):
 #   }
 # }
 def modify_mission_id(exp):
-    """Compute propagation times (RTS and fragment based) per mission ID."""
+    """Compute propagation times (RTS and fragment based) per mission ID
+    and count how many nodes received the mission message."""
     vectors = exp.get("vectors", [])
     if not vectors:
         exp["vectors"] = []
@@ -218,6 +219,7 @@ def modify_mission_id(exp):
     mission_ids = []
     prop_rts = []
     prop_frag = []
+    num_receivers = []
 
     for mid in sorted(all_mission_ids):
         # earliest RTS and fragment sends
@@ -230,11 +232,12 @@ def modify_mission_id(exp):
         first_rts = min(rts_times) if rts_times else None
         first_fragment = min(frag_times) if frag_times else None
 
-        # last reception time
+        # all reception times for this mission
         rec_times = [d[mid] for d in mission_received.values() if mid in d]
         if not rec_times:
             continue
         last_rec = max(rec_times)
+        receiver_count = len(rec_times)
 
         delay_rts = (last_rec - first_rts) if first_rts is not None else None
         delay_frag = (last_rec - first_fragment) if first_fragment is not None else None
@@ -242,12 +245,15 @@ def modify_mission_id(exp):
         mission_ids.append(mid)
         prop_rts.append(round(delay_rts, 3) if delay_rts is not None else None)
         prop_frag.append(round(delay_frag, 3) if delay_frag is not None else None)
+        num_receivers.append(receiver_count)
 
     exp["vectors"] = {
         "missionId": mission_ids,
         "propagation_time_rts": prop_rts,
-        "propagation_time_fragment": prop_frag
+        "propagation_time_fragment": prop_frag,
+        "receivers": num_receivers,
     }
+
 
 
 

@@ -22,7 +22,9 @@
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/lifecycle/LifecycleOperation.h"
 
-#include "../LoRa/LoRaRadio.h"
+#include "../loraSpecific/LoRa/LoRaRadio.h"
+#include "../loraSpecific/LoRa/LoRaTagInfo_m.h"
+
 #include "LoRaRobotPacket_m.h"
 
 using namespace omnetpp;

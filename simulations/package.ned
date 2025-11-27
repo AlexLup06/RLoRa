@@ -1,7 +1,7 @@
 package rlora.simulations;
 
-import rlora.LoraNode.LoRaNode;
-import rlora.LoRaPhy.LoRaMedium;
+import rlora.loraSpecific.LoraNode.LoRaNode;
+import rlora.loraSpecific.LoRaPhy.LoRaMedium;
 import inet.networklayer.configurator.ipv4.Ipv4NetworkConfigurator;
 
 @license(LGPL);

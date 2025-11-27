@@ -14,7 +14,6 @@
 // 
 
 #include "LoRaApp.h"
-#include "../LoRa/LoRaTagInfo_m.h"
 
 namespace rlora {
 
