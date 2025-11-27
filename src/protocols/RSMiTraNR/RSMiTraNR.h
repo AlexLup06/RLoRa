@@ -20,6 +20,7 @@
 
 using namespace inet;
 using namespace physicallayer;
+using namespace std;
 
 namespace rlora {
 

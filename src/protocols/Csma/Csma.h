@@ -41,7 +41,7 @@ protected:
     long bytesReceivedInInterval = 0;
     long effectiveBytesReceivedInInterval = 0;
     double bitrate = NaN;
-    int cw = 8;
+    int cw = 16;
 
     simsignal_t throughputSignal;
     simsignal_t effectiveThroughputSignal;

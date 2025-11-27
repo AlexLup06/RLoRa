@@ -223,16 +223,16 @@ void Aloha::handleWithFsm(cMessage *msg)
     FSMA_State(LISTENING)
     {
         FSMA_Event_Transition(Listening-Receiving,
-                isReceiving() && currentTxFrame==nullptr,
+                isReceiving(),
                 RECEIVING,
         );
 
         FSMA_Event_Transition(Listening-Transmitting_1,
-                currentTxFrame!=nullptr,
+                currentTxFrame!=nullptr && ! isReceiving(),
                 TRANSMITING,
         );
     }
-
+    
     FSMA_State(TRANSMITING)
     {
         FSMA_Enter(radio->setRadioMode(IRadio::RADIO_MODE_TRANSMITTER));
@@ -254,11 +254,7 @@ void Aloha::handleWithFsm(cMessage *msg)
                 isLowerMessage(msg),
                 LISTENING,
                 handlePacket(pkt);
-        );
-        FSMA_Event_Transition(Receiving-Transmitting,
-                currentTxFrame!=nullptr,
-                TRANSMITING,
-        );
+        ); 
         FSMA_Event_Transition(Receive-BelowSensitivity,
                 msg == droppedPacket,
                 LISTENING,

@@ -33,7 +33,7 @@ void LoRaTransmitter::initialize(int stage)
 {
     TransmitterBase::initialize(stage);
     if (stage == INITSTAGE_LOCAL) {
-        preambleDuration = 0.001; //par("preambleDuration");
+        preambleDuration = 0.006272; //par("preambleDuration");
 
         headerLength = b(par("headerLength"));
         bitrate = bps(par("bitrate"));
@@ -75,7 +75,7 @@ const ITransmission* LoRaTransmitter::createTransmission(const IRadio *transmitt
 
 //    const LoRaMacFrame *frame = check_and_cast<const LoRaMacFrame *>(macFrame);
 
-    int nPreamble = 12;
+    int nPreamble = 8;
     simtime_t Tsym = (pow(2, sf)) / (bw / 1000);
     simtime_t Tpreamble = (nPreamble + 4.25) * Tsym / 1000;
     simtime_t Theader = 8 * Tsym / 1000;

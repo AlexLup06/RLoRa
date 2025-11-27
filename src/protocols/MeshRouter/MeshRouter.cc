@@ -295,20 +295,7 @@ void MeshRouter::handlePacket(Packet *packet)
     Packet *messageFrame = decapsulate(packet);
     auto chunk = messageFrame->peekAtFront<inet::Chunk>();
 
-    if (auto msg = dynamic_cast<const NodeAnnounce*>(chunk.get())) {
-        EV << "Received NodeAnnounce" << endl;
-        // einfach kopirt aus Julians implementierung
-        if (nodeId != msg->getNodeId()) {
-
-            if (msg->getRespond() == 1) {
-                // Unknown node! Block Sending for a time window, to allow other Nodes to respond.
-                senderWaitDelay(0 + intuniform(0, 450));
-                announceNodeId(0);
-            }
-        }
-
-    }
-    else if (auto msg = dynamic_cast<const BroadcastHeader*>(chunk.get())) {
+    if (auto msg = dynamic_cast<const BroadcastHeader*>(chunk.get())) {
         int messageId = msg->getMessageId();
         int source = msg->getSource();
         int missionId = msg->getMissionId();

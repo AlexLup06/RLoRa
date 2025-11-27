@@ -742,7 +742,6 @@ void RSMiTraNR::sendCTS()
     auto ctsPayload = makeShared<BroadcastCTS>();
 
     ASSERT(sizeOfFragment_CTSData > 0);
-    ASSERT(source_CTSData > 0);
     ctsPayload->setChunkLength(B(BROADCAST_CTS));
     ctsPayload->setSizeOfFragment(sizeOfFragment_CTSData);
     ctsPayload->setHopId(sourceOfRTS_CTSData);
@@ -1160,7 +1159,7 @@ double RSMiTraNR::predictOngoingMsgTime(int packetBytes)
     double cr = loRaRadio->loRaCR;
     simtime_t Tsym = (pow(2, sf)) / (bw / 1000);
 
-    double preambleSymbNb = 12;
+    double preambleSymbNb = 8;
     double headerSymbNb = 8;
     double payloadSymbNb = std::ceil((8 * packetBytes - 4 * sf + 28 + 16 - 20 * 0) / (4 * (sf - 2 * 0))) * (cr + 4);
     if (payloadSymbNb < 0)

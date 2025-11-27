@@ -4,8 +4,8 @@
             "name": "Mac",
             "includePath": [
                 "${workspaceFolder}/**",
-                "~/Documents/Uni/Masterarbeit/lora-workspace/inet-4.4.0/**",
-                "~/Documents/Uni/Masterarbeit/lora-workspace/flora-1.1.0/**"
+                "~/Documents/Uni/Masterarbeit/lora-workspace/inet-4.4.0/src/**",
+                "~/Documents/Uni/Masterarbeit/lora-workspace/omnetpp-6.0.3/include/**"
             ],
             "defines": [],
             "macFrameworkPath": [
