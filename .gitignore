@@ -1,7 +1,7 @@
 simulations/results
 out
 *.anf
-scripts/venv
+**/venv
 *_m.h
 *_m.cc
 data/**/*.txt
