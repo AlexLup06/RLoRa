@@ -6,6 +6,9 @@ scripts/venv
 *_m.cc
 data/**/*.txt
 data/**/*.json
+data_aggregated/**/*.txt
+data_aggregated/**/*.json
 Makefile
-simulations/dynamicParams.ini
 src/Makefile
+**/__pycache__/
+__pycache__/

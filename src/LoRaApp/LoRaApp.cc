@@ -80,7 +80,7 @@ void LoRaApp::sendMessageDown(bool isMission)
 
     payload->setIsMission(isMission);
     if (isMission) {
-        payload->setChunkLength(B(intuniform(50, 240)));
+        payload->setChunkLength(B(intuniform(50, 245)));
     }
     else {
         payload->setChunkLength(B(144));
