@@ -23,7 +23,7 @@ namespace rlora
         virtual void initializeProtocol() {};
         virtual void finishProtocol() {};
 
-        virtual void createPacket(int payloadSize, int missionId, int source, bool retransmit) = 0;
+        virtual void createPacket(int payloadSize, int missionId, int source, bool isMission) = 0;
 
         void handleSelfMessage(cMessage *msg) override;
         virtual void handleUpperPacket(Packet *packet) override;

@@ -173,12 +173,12 @@ namespace rlora
         decapsulate(packet);
         auto chunk = packet->peekAtFront<inet::Chunk>();
 
-        if (auto msg = dynamic_cast<const BroadcastHeader *>(chunk.get()))
+        if (auto msg = dynamic_cast<const BroadcastRts *>(chunk.get()))
         {
             int messageId = msg->getMessageId();
             int source = msg->getSource();
             int missionId = msg->getMissionId();
-            bool isMissionMsg = msg->getRetransmit();
+            bool isMissionMsg = msg->isMission();
 
             if (!isMissionMsg && !incompleteNeighbourPktList.isNewIdHigher(source, messageId))
             {
@@ -200,7 +200,7 @@ namespace rlora
             incompletePacket.lastHop = msg->getHop();
             incompletePacket.received = 0;
             incompletePacket.corrupted = false;
-            incompletePacket.retransmit = msg->getRetransmit();
+            incompletePacket.isMission = msg->isMission();
 
             addPacketToList(incompletePacket, isMissionMsg);
 
@@ -210,7 +210,7 @@ namespace rlora
             sourceOfRTS_CTSData = msg->getHop();
             setRTSsource(msg->getHop());
         }
-        else if (auto msg = dynamic_cast<const BroadcastContinuousHeader *>(chunk.get()))
+        else if (auto msg = dynamic_cast<const BroadcastContinuousRts *>(chunk.get()))
         {
             int messageId = msg->getMessageId();
             int source = msg->getSource();
@@ -259,8 +259,8 @@ namespace rlora
         }
     }
 
-    void IRSMiTra::createPacket(int payloadSize, int missionId, int source, bool retransmit)
+    void IRSMiTra::createPacket(int payloadSize, int missionId, int source, bool isMission)
     {
-        createBroadcastPacketWithContinuousRTS(payloadSize, missionId, source, retransmit);
+        createBroadcastPacketWithContinuousRTS(payloadSize, missionId, source, isMission);
     }
 }

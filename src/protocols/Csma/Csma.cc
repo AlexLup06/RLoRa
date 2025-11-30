@@ -112,7 +112,7 @@ namespace rlora
         int messageId = msg->getMessageId();
         int source = msg->getSource();
         int missionId = msg->getMissionId();
-        bool isMissionMsg = msg->getRetransmit();
+        bool isMissionMsg = msg->isMission();
 
         if (!isMissionMsg && !incompleteNeighbourPktList.isNewIdHigher(source, messageId))
         {
@@ -132,7 +132,7 @@ namespace rlora
         incompletePacket.lastHop = msg->getHop();
         incompletePacket.received = 0;
         incompletePacket.corrupted = false;
-        incompletePacket.retransmit = msg->getRetransmit();
+        incompletePacket.isMission = msg->isMission();
 
         addPacketToList(incompletePacket, isMissionMsg);
 
@@ -158,8 +158,8 @@ namespace rlora
         retransmitPacket(result);
     }
 
-    void Csma::createPacket(int payloadSize, int missionId, int source, bool retransmit)
+    void Csma::createPacket(int payloadSize, int missionId, int source, bool isMission)
     {
-        createBroadcastPacket(payloadSize, missionId, source, retransmit);
+        createBroadcastPacket(payloadSize, missionId, source, isMission);
     }
 }

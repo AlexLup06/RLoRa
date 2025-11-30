@@ -59,8 +59,6 @@ namespace rlora
 
     void MacBase::handleUpperPacket(Packet *packet)
     {
-        EV << "in handleUpperPacket" << endl;
-
         const auto &payload = packet->peekAtFront<LoRaRobotPacket>();
         bool isMission = payload->isMission();
         int missionId = -2;
@@ -76,7 +74,7 @@ namespace rlora
             Packet *packetToSend = dequeueCustomPacket();
             currentTxFrame = packetToSend;
         }
-        handleWithFsm(moreMessagesToSend);  // TODO might be error for MiRS. right now we have special SelfMessage
+        handleWithFsm(moreMessagesToSend);
         delete packet;
     }
 
@@ -100,14 +98,13 @@ namespace rlora
                 cMessage *readyMsg = new cMessage("Ready");
                 sendUp(readyMsg);
 
-                if (!result.completePacket.retransmit || result.completePacket.sourceNode == nodeId)
+                if (!result.completePacket.isMission || result.completePacket.sourceNode == nodeId)
                 {
                     return;
                 }
 
-                EV << "Retransmit Packet!" << endl;
                 emit(receivedMissionId, result.completePacket.missionId);
-                createPacket(result.completePacket.size, result.completePacket.missionId, result.completePacket.sourceNode, result.completePacket.retransmit);
+                createPacket(result.completePacket.size, result.completePacket.missionId, result.completePacket.sourceNode, result.completePacket.isMission);
             }
 
             removePacketById(result.completePacket.missionId, result.completePacket.messageId, result.isMission);

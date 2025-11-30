@@ -28,7 +28,7 @@ namespace rlora
         void handleWithFsm(cMessage *msg) override;
         void handlePacket(Packet *packet) override;
 
-        void createPacket(int payloadSize, int missionId, int source, bool retransmit) override;
+        void createPacket(int payloadSize, int missionId, int source, bool isMission) override;
 
         void handleLeaderFragment(const BroadcastLeaderFragment *msg);
         void handleFragment(const BroadcastFragment *msg);

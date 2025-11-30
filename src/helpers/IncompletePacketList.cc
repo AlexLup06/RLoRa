@@ -53,7 +53,7 @@ void IncompletePacketList::removePacketById(int id)
 void IncompletePacketList::addPacket(const FragmentedPacket &packet)
 {
     removePacketBySource(packet.sourceNode);
-    if (packet.retransmit)
+    if (packet.isMission)
         EV << "Creating packet with id: " << packet.missionId << endl;
 
     packets_.push_back(packet);
@@ -114,7 +114,7 @@ Result IncompletePacketList::addToIncompletePacket(const BroadcastFragment *pack
             result.isComplete = true;
             result.sendUp = true;
             result.waitTime = waitTime;
-            result.isMission = incompletePacket->retransmit;
+            result.isMission = incompletePacket->isMission;
             result.completePacket = *incompletePacket;
             return result;
         }

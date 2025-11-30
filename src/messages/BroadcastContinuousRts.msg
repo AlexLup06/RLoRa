@@ -7,12 +7,11 @@ using namespace inet;
 
 namespace rlora;
 
-class BroadcastLeaderFragment extends inet::FieldsChunk {
-    int source;
-    int hop;
+class BroadcastContinuousRts extends inet::FieldsChunk {
     int messageId;
-    int size;
-    int payloadSize;
+    int payloadSizeOfNextFragment;
     int missionId;
-    bool isMission;
+    int source;
+    int hopId;
 }
+

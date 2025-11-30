@@ -49,7 +49,6 @@ namespace rlora
         bool isFreeToSend();
         bool withRTS();
         void clearRTSsource();
-        void generateCTSCWPeriod();
         void setRTSsource(int rtsSourceId);
 
     private:

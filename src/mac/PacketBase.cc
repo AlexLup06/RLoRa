@@ -120,7 +120,7 @@ namespace rlora
         headerPayload->setMissionId(missionId);
         headerPayload->setSource(source);
         headerPayload->setHop(nodeId);
-        headerPayload->setRetransmit(isMission);
+        headerPayload->setIsMission(isMission);
         headerPaket->insertAtBack(headerPayload);
         headerPaket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
 
@@ -175,14 +175,14 @@ namespace rlora
         }
     }
 
-    void PacketBase::createBroadcastPacketWithRTS(int payloadSize, int missionId, int source, bool retransmit)
+    void PacketBase::createBroadcastPacketWithRTS(int payloadSize, int missionId, int source, bool isMission)
     {
         if (source == -1)
         {
             source = nodeId;
         }
 
-        Packet *headerPaket = createHeader(missionId, source, payloadSize, retransmit);
+        Packet *headerPaket = createHeader(missionId, source, payloadSize, isMission);
 
         if (missionId == -1)
         {
@@ -226,7 +226,7 @@ namespace rlora
             fragmentPacket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
 
             auto messageInfoTag = fragmentPacket->addTagIfAbsent<MessageInfoTag>();
-            messageInfoTag->setIsNeighbourMsg(!retransmit);
+            messageInfoTag->setIsNeighbourMsg(!isMission);
             messageInfoTag->setMissionId(missionId);
             messageInfoTag->setIsHeader(false);
             messageInfoTag->setHasUsefulData(true);
@@ -248,47 +248,47 @@ namespace rlora
         }
     }
 
-    Packet *PacketBase::createHeader(int missionId, int source, int payloadSize, bool retransmit)
+    Packet *PacketBase::createHeader(int missionId, int source, int payloadSize, bool isMission)
     {
         EV << "createHeader" << endl;
 
-        Packet *headerPaket = new Packet("BroadcastHeaderPkt");
+        Packet *headerPaket = new Packet("BroadcastRtsPkt");
 
         if (missionId == -1)
         {
             missionId = headerPaket->getId();
         }
 
-        auto headerPayload = makeShared<BroadcastHeader>();
+        auto headerPayload = makeShared<BroadcastRts>();
         headerPayload->setChunkLength(B(BROADCAST_HEADER_SIZE));
         headerPayload->setSize(payloadSize);
         headerPayload->setMissionId(missionId);
         headerPayload->setMessageId(headerPaket->getId());
         headerPayload->setSource(source);
         headerPayload->setHop(nodeId);
-        headerPayload->setRetransmit(retransmit);
+        headerPayload->setIsMission(isMission);
         headerPaket->insertAtBack(headerPayload);
         headerPaket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
 
         auto messageInfoTag = headerPaket->addTagIfAbsent<MessageInfoTag>();
-        messageInfoTag->setIsNeighbourMsg(!retransmit);
+        messageInfoTag->setIsNeighbourMsg(!isMission);
         messageInfoTag->setMissionId(missionId);
         messageInfoTag->setIsHeader(true);
 
         return headerPaket;
     }
 
-    Packet *PacketBase::createContinuousHeader(int missionId, int source, int payloadSize, bool retransmit)
+    Packet *PacketBase::createContinuousHeader(int missionId, int source, int payloadSize, bool isMission)
     {
         EV << "createContinuousHeader" << endl;
-        Packet *headerPaket = new Packet("BroadcastContinuousHeader");
+        Packet *headerPaket = new Packet("BroadcastContinuousRts");
 
         if (missionId == -1)
         {
             missionId = headerPaket->getId();
         }
 
-        auto headerPayload = makeShared<BroadcastContinuousHeader>();
+        auto headerPayload = makeShared<BroadcastContinuousRts>();
         headerPayload->setChunkLength(B(BROADCAST_CONTINIOUS_HEADER));
         headerPayload->setPayloadSizeOfNextFragment(payloadSize + BROADCAST_FRAGMENT_META_SIZE);
         headerPayload->setHopId(nodeId);
@@ -297,23 +297,23 @@ namespace rlora
         headerPaket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
 
         auto messageInfoTag = headerPaket->addTagIfAbsent<MessageInfoTag>();
-        messageInfoTag->setIsNeighbourMsg(!retransmit);
+        messageInfoTag->setIsNeighbourMsg(!isMission);
         messageInfoTag->setMissionId(missionId);
         messageInfoTag->setIsHeader(true);
-        messageInfoTag->setWithRTS(retransmit);
+        messageInfoTag->setWithRTS(isMission);
 
         return headerPaket;
     }
 
     // TODO: if we want to send Neighbour broadcast, then we dont need a separat header. Or just send leader fragment
-    void PacketBase::createBroadcastPacketWithContinuousRTS(int payloadSize, int missionId, int source, bool retransmit)
+    void PacketBase::createBroadcastPacketWithContinuousRTS(int payloadSize, int missionId, int source, bool isMission)
     {
         if (source == -1)
         {
             source = nodeId;
         }
 
-        Packet *headerPaket = createHeader(missionId, source, payloadSize, retransmit);
+        Packet *headerPaket = createHeader(missionId, source, payloadSize, isMission);
 
         if (missionId == -1)
         {
@@ -330,7 +330,7 @@ namespace rlora
             bool hasRegularHeader = true;
             if (i > 0)
             {
-                Packet *continuousHeader = createContinuousHeader(missionId, source, payloadSize, retransmit);
+                Packet *continuousHeader = createContinuousHeader(missionId, source, payloadSize, isMission);
                 encapsulate(continuousHeader);
                 packetQueue.enqueuePacket(continuousHeader);
                 hasRegularHeader = false;
@@ -363,13 +363,13 @@ namespace rlora
             fragmentPacket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
 
             auto messageInfoTag = fragmentPacket->addTagIfAbsent<MessageInfoTag>();
-            messageInfoTag->setIsNeighbourMsg(!retransmit);
+            messageInfoTag->setIsNeighbourMsg(!isMission);
             messageInfoTag->setMissionId(missionId);
             messageInfoTag->setIsHeader(false);
             messageInfoTag->setHopId(nodeId);
             messageInfoTag->setHasUsefulData(true);
             messageInfoTag->setPayloadSize(currentPayloadSize);
-            messageInfoTag->setWithRTS(retransmit);
+            messageInfoTag->setWithRTS(isMission);
             messageInfoTag->setHasRegularHeader(hasRegularHeader);
 
             encapsulate(fragmentPacket);
@@ -377,7 +377,7 @@ namespace rlora
         }
     }
 
-    void PacketBase::createNeighbourPacket(int payloadSize, int source, bool retransmit)
+    void PacketBase::createNeighbourPacket(int payloadSize, int source, bool isMission)
     {
         auto leaderpacket = new Packet("BroadcastLeaderFragment");
         auto leaderPayload = makeShared<BroadcastLeaderFragment>();
@@ -396,7 +396,7 @@ namespace rlora
         leaderPayload->setMissionId(-1);
         leaderPayload->setSource(source);
         leaderPayload->setHop(nodeId);
-        leaderPayload->setRetransmit(retransmit);
+        leaderPayload->setIsMission(isMission);
         leaderpacket->insertAtBack(leaderPayload);
         leaderpacket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
 

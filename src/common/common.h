@@ -1,10 +1,3 @@
-/*
- * common.h
- *
- *  Created on: 27 Nov 2025
- *      Author: alexanderlupatsiy
- */
-
 #ifndef COMMON_COMMON_H_
 #define COMMON_COMMON_H_
 
@@ -48,11 +41,10 @@
 #include "../tags/MessageInfoTag_m.h"
 #include "../tags/WaitTimeTag_m.h"
 #include "../messages/NodeAnnounce_m.h"
-#include "../messages/BroadcastHeader_m.h"
-#include "../messages/BroadcastContinuousHeader_m.h"
+#include "../messages/BroadcastRts_m.h"
+#include "../messages/BroadcastContinuousRts_m.h"
 #include "../messages/BroadcastLeaderFragment_m.h"
 #include "../messages/BroadcastCTS_m.h"
 #include "../messages/BroadcastFragment_m.h"
 
-
-#endif /* COMMON_COMMON_H_ */
+#endif

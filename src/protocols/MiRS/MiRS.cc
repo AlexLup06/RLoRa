@@ -177,12 +177,12 @@ namespace rlora
         decapsulate(packet);
         auto chunk = packet->peekAtFront<inet::Chunk>();
 
-        if (auto msg = dynamic_cast<const BroadcastHeader *>(chunk.get()))
+        if (auto msg = dynamic_cast<const BroadcastRts *>(chunk.get()))
         {
             int messageId = msg->getMessageId();
             int source = msg->getSource();
             int missionId = msg->getMissionId();
-            bool isMissionMsg = msg->getRetransmit();
+            bool isMissionMsg = msg->isMission();
 
             if (!isMissionMsg && !incompleteNeighbourPktList.isNewIdHigher(source, messageId))
             {
@@ -206,7 +206,7 @@ namespace rlora
             incompletePacket.lastHop = msg->getHop();
             incompletePacket.received = 0;
             incompletePacket.corrupted = false;
-            incompletePacket.retransmit = msg->getRetransmit();
+            incompletePacket.isMission = msg->isMission();
 
             addPacketToList(incompletePacket, isMissionMsg);
 
@@ -239,7 +239,7 @@ namespace rlora
             incompletePacket.lastHop = msg->getHop();
             incompletePacket.received = 0;
             incompletePacket.corrupted = false;
-            incompletePacket.retransmit = msg->getRetransmit();
+            incompletePacket.isMission = msg->isMission();
 
             incompleteNeighbourPktList.addPacket(incompletePacket);
             incompleteNeighbourPktList.updatePacketId(source, messageId);
@@ -257,7 +257,7 @@ namespace rlora
             retransmitPacket(result);
             delete fragmentPayload;
         }
-        else if (auto msg = dynamic_cast<const BroadcastContinuousHeader *>(chunk.get()))
+        else if (auto msg = dynamic_cast<const BroadcastContinuousRts *>(chunk.get()))
         {
             int messageId = msg->getMessageId();
             int source = msg->getSource();
@@ -306,11 +306,11 @@ namespace rlora
         }
     }
 
-    void MiRS::createPacket(int payloadSize, int missionId, int source, bool retransmit)
+    void MiRS::createPacket(int payloadSize, int missionId, int source, bool isMission)
     {
-        if (retransmit)
+        if (isMission)
         {
-            createBroadcastPacketWithContinuousRTS(payloadSize, missionId, source, retransmit);
+            createBroadcastPacketWithContinuousRTS(payloadSize, missionId, source, isMission);
         }
         else
         {

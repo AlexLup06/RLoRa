@@ -24,12 +24,12 @@ namespace rlora
         void encapsulate(Packet *msg);
         void decapsulate(Packet *frame);
 
-        void createBroadcastPacket(int payloadSize, int missionId, int source, bool retransmit);
-        void createBroadcastPacketWithRTS(int payloadSize, int missionId, int source, bool retransmit);
-        void createBroadcastPacketWithContinuousRTS(int payloadSize, int missionId, int source, bool retransmit);
-        Packet *createHeader(int missionId, int source, int payloadSize, bool retransmit);
-        Packet *createContinuousHeader(int missionId, int source, int payloadSize, bool retransmit);
-        void createNeighbourPacket(int payloadSize, int source, bool retransmit);
+        void createBroadcastPacket(int payloadSize, int missionId, int source, bool isMission);
+        void createBroadcastPacketWithRTS(int payloadSize, int missionId, int source, bool isMission);
+        void createBroadcastPacketWithContinuousRTS(int payloadSize, int missionId, int source, bool isMission);
+        Packet *createHeader(int missionId, int source, int payloadSize, bool isMission);
+        Packet *createContinuousHeader(int missionId, int source, int payloadSize, bool isMission);
+        void createNeighbourPacket(int payloadSize, int source, bool isMission);
         Packet *dequeueCustomPacket();
 
         IncompletePacketList incompleteMissionPktList;

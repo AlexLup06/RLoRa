@@ -10,10 +10,6 @@
 
 namespace rlora {
 
-CustomPacketQueue::CustomPacketQueue()
-{
-}
-
 CustomPacketQueue::~CustomPacketQueue()
 {
     while (!packetQueue.empty()) {
