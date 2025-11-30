@@ -36,7 +36,7 @@ string CustomPacketQueue::toString() const
     return oss.str();
 }
 
-bool CustomPacketQueue::enqueuePacket(Packet *pkt)
+void CustomPacketQueue::enqueuePacket(Packet *pkt)
 {
     auto typeTag = pkt->getTag<MessageInfoTag>();
     EV << "CustomPacketQueue::enqueuePacket" << endl;
@@ -44,7 +44,7 @@ bool CustomPacketQueue::enqueuePacket(Packet *pkt)
     if (!typeTag->isNeighbourMsg()) {
         EV << "This is Mission - Just adding to back" << endl;
         packetQueue.push_back(pkt);
-        return true;
+        return;
     }
 
     if (typeTag->isHeader()) {
@@ -82,7 +82,6 @@ bool CustomPacketQueue::enqueuePacket(Packet *pkt)
         if (firstNeighbourPos == -1) {
             EV << "No neighbour MSG - adding to back" << endl;
             packetQueue.push_back(pkt);
-            return true;
         }
         else {
             EV << "removed all unwanted and now enqueuing at postion" << endl;
@@ -116,7 +115,6 @@ bool CustomPacketQueue::enqueuePacket(Packet *pkt)
             packetQueue.push_front(pkt); // no NeighbourMsgs, put at the beginning
         }
     }
-    return false;
 }
 
 void CustomPacketQueue::enqueuePacketAtPosition(Packet *pkt, int pos)

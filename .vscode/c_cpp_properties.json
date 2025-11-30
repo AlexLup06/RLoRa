@@ -5,7 +5,8 @@
             "includePath": [
                 "${workspaceFolder}/**",
                 "~/Documents/Uni/Masterarbeit/lora-workspace/inet-4.4.0/src/**",
-                "~/Documents/Uni/Masterarbeit/lora-workspace/omnetpp-6.0.3/include/**"
+                "~/Documents/Uni/Masterarbeit/lora-workspace/omnetpp-6.0.3/include/**",
+                "/Users/alexanderlupatsiy/Documents/Uni/Masterarbeit/lora-workspace/omnetpp-6.0.3/include"
             ],
             "defines": [],
             "macFrameworkPath": [

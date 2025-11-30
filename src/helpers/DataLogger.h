@@ -24,11 +24,21 @@ private:
     set<string> collisionSet;
     set<string> possibleCollisionSet;
 
-    int effectiveBytesReceived = 0;
-    int effectiveBytesSent = 0;
+    int transmissions = 0;
+    int effectiveTransmissions = 0;
 
-    int bytesReceived = 0;
+    int receptions = 0;
+    int effectiveReceptions = 0;
+
+    int effectiveBytesSent = 0;
+    int effectiveBytesReceived = 0;
+    int effectiveBytesReceivedIncludingCollisions = 0;
+
     int bytesSent = 0;
+    int bytesReceived = 0;
+    int bytesReceivedIncludingCollisions = 0;
+
+
 
     DataLogger()
     {
@@ -40,12 +50,18 @@ public:
 
     static DataLogger* getInstance();
 
-    void logCollision(int id1, int id2);
-    void logPossibleCollision(int id1, int id2);
-    void logEffectiveBytesReceived(int size);
-    void logEffectiveBytesSent(int size);
-    void logBytesReceived(int size);
-    void logBytesSent(int size);
+    void logCollision(int id1, int id2);                            // ✅
+    void logPossibleCollision(int id1, int id2);                    // ✅
+    void logEffectiveTransmission();                                // ✅
+    void logEffectiveReceptions();                                  // ✅
+    void logEffectiveBytesSent(int size);                           // ✅
+    void logEffectiveBytesReceived(int size);                       // ✅
+    void logEffectiveBytesReceivedIncludingCollisions(int size);    // ✅
+    void logTransmission();                                         // ✅
+    void logReceptions();                                           // ✅
+    void logBytesSent(int size);                                    // ✅
+    void logBytesReceived(int size);                                // ✅
+    void logBytesReceivedIncludingCollisions(int size);             // ✅
 
     // Am Ende schreiben
     void writeDataToFile(const std::string &filename = "data.txt");

@@ -42,8 +42,8 @@
 #include "../helpers/generalHelpers.h"
 #include "../helpers/CustomPacketQueue.h"
 #include "../helpers/IncompletePacketList.h"
-#include "../helpers/TimeOfLastTrajectory.h"
-#include "../helpers/MissionIdTracker.h"
+#include "../helpers/DataLogger.h"
+#include "../helpers/BackoffHandler.h"
 
 #include "../tags/MessageInfoTag_m.h"
 #include "../tags/WaitTimeTag_m.h"

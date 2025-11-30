@@ -7,11 +7,11 @@ BASE_DIR = os.getenv("rlora_root") or os.getcwd()
 
 
 # Ranges
-robot_range = [2, 100]  # node count
-msg_rate_range = [1/60, 10]  # messages per second
+robot_range = [5, 30]  # node count
+msg_rate_range = [1/120, 10]  # messages per second
 
 # LHS setup
-n_samples = 200
+n_samples = 10
 seed = 42
 sampler = qmc.LatinHypercube(d=2, seed=seed)
 lhs_samples = sampler.random(n=n_samples)
@@ -22,7 +22,8 @@ robot_samples = np.round(
 ).astype(int)
 
 # 2. Scale message rate dimension using truncated normal distribution
-mu, sigma = 0.2, 0.25
+# mean is 1 message every 5 seconds
+mu, sigma = 0.05, 0.1
 a, b = (msg_rate_range[0] - mu) / sigma, (msg_rate_range[1] - mu) / sigma
 trunc_norm = truncnorm(a, b, loc=mu, scale=sigma)
 msg_rate_samples = trunc_norm.ppf(lhs_samples[:, 1])  # from CDF space to actual values

@@ -1,1329 +1,320 @@
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-// 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-// 
-// You should have received a copy of the GNU Lesser General Public License
-// along with this program.  If not, see http://www.gnu.org/licenses/.
-// 
-
 #include "MiRS.h"
 
-namespace rlora {
-
-Define_Module(MiRS);
-
-MiRS::~MiRS()
+namespace rlora
 {
-}
+    Define_Module(MiRS);
 
-/****************************************************************
- * Initialization functions.
- */
-void MiRS::initialize(int stage)
-{
-    MacProtocolBase::initialize(stage);
-    if (stage == INITSTAGE_LOCAL) {
-        const char *addressString = par("address");
-        if (!strcmp(addressString, "auto")) {
-            address = MacAddress::generateAutoAddress();
-            par("address").setStringValue(address.str().c_str());
-        }
-        else
-            address.setAddress(addressString);
-
-        // subscribe for the information of the carrier sense
-        cModule *radioModule = getModuleFromPar<cModule>(par("radioModule"), this);
-        radioModule->subscribe(IRadio::receptionStateChangedSignal, this);
-        radioModule->subscribe(IRadio::transmissionStateChangedSignal, this);
-        radioModule->subscribe(LoRaRadio::droppedPacket, this);
-        radio = check_and_cast<IRadio*>(radioModule);
-        loRaRadio = check_and_cast<LoRaRadio*>(radioModule);
-
-        txQueue = getQueue(gate(upperLayerInGateId));
-        packetQueue = CustomPacketQueue();
-
-        nodeId = intuniform(0, 16777216); //16^6 -1
-
-        mediumStateChange = new cMessage("mediumStateChange");
-        droppedPacket = new cMessage("Dropped Packet");
-        endTransmission = new cMessage("End Transmission");
-        transmitSwitchDone = new cMessage("transmitSwitchDone");
-        nodeAnnounce = new cMessage("Node Announce");
-        CTSWaitTimeout = new cMessage("CTSWaitTimeout");
-        receivedCTS = new cMessage("receivedCTS");
-        throughputTimer = new cMessage("throughputTimer");
-        endOngoingMsg = new cMessage("endOngoingMsg");
-        initiateCTS = new cMessage("initiateCTS");
-        endBackoff = new cMessage("endBackoff");
-        transmissionStartTimeout = new cMessage("transmissionStartTimeout");
-        gotNewMessagToSend = new cMessage("gotNewMessagToSend");
-        ctsCWTimeout = new cMessage("ctsCWTimeout");
-        moreMessagesToSend = new cMessage("moreMessagesToSend");
-        transmissionEndTimeout = new cMessage("transmissionEndTimeout");
-        shortWait = new cMessage("shortWait");
-
-        throughputSignal = registerSignal("throughputBps");
-        effectiveThroughputSignal = registerSignal("effectiveThroughputBps");
-        timeInQueue = registerSignal("timeInQueue");
-        missionIdRtsSent = registerSignal("missionIdRtsSent");
-        missionIdFragmentSent = registerSignal("missionIdFragmentSent");
-        receivedMissionId = registerSignal("receivedMissionId");
-        timeOfLastTrajectorySignal = registerSignal("timeOfLastTrajectorySignal");
-
-        scheduleAt(simTime() + measurementInterval, throughputTimer);
-        scheduleAt(intuniform(500, 1000) / 1000.0, nodeAnnounce);
-        fsm.setState(LISTENING); // We are always in Listening state
-    }
-    else if (stage == INITSTAGE_LINK_LAYER) {
-        turnOnReceiver();
-    }
-}
-
-void MiRS::finish()
-{
-    cancelAndDelete(mediumStateChange);
-    cancelAndDelete(droppedPacket);
-    cancelAndDelete(endTransmission);
-    cancelAndDelete(transmitSwitchDone);
-    cancelAndDelete(nodeAnnounce);
-    cancelAndDelete(CTSWaitTimeout);
-    cancelAndDelete(receivedCTS);
-    cancelAndDelete(throughputTimer);
-    cancelAndDelete(endOngoingMsg);
-    cancelAndDelete(initiateCTS);
-    cancelAndDelete(endBackoff);
-    cancelAndDelete(transmissionStartTimeout);
-    cancelAndDelete(gotNewMessagToSend);
-    cancelAndDelete(ctsCWTimeout);
-    cancelAndDelete(moreMessagesToSend);
-    cancelAndDelete(transmissionEndTimeout);
-    cancelAndDelete(shortWait);
-
-    mediumStateChange = nullptr;
-    droppedPacket = nullptr;
-    endTransmission = nullptr;
-    transmitSwitchDone = nullptr;
-    nodeAnnounce = nullptr;
-    CTSWaitTimeout = nullptr;
-    receivedCTS = nullptr;
-    throughputTimer = nullptr;
-    endOngoingMsg = nullptr;
-    initiateCTS = nullptr;
-    endBackoff = nullptr;
-    transmissionStartTimeout = nullptr;
-    gotNewMessagToSend = nullptr;
-    ctsCWTimeout = nullptr;
-    moreMessagesToSend = nullptr;
-    transmissionEndTimeout = nullptr;
-    shortWait = nullptr;
-
-    while (!packetQueue.isEmpty()) {
-        auto *pkt = packetQueue.dequeuePacket();
-        delete pkt;
-    }
-
-    currentTxFrame = nullptr;
-}
-
-void MiRS::configureNetworkInterface()
-{
-    // data rate
-    networkInterface->setDatarate(bitrate);
-    networkInterface->setMacAddress(address);
-
-    // capabilities
-    networkInterface->setMtu(std::numeric_limits<int>::quiet_NaN());
-    networkInterface->setMulticast(true);
-    networkInterface->setBroadcast(true);
-    networkInterface->setPointToPoint(false);
-}
-
-queueing::IPassivePacketSource* MiRS::getProvider(cGate *gate)
-{
-    return (gate->getId() == upperLayerInGateId) ? txQueue.get() : nullptr;
-}
-
-// ================================================================================================
-// Handle Messages and Signals
-// ================================================================================================
-
-void MiRS::handleWithFsm(cMessage *msg)
-{
-    EV << "Handlewigthfsms" << endl;
-    EV << "Handlewigthfsms: " << msg << endl;
-    EV << "CurrentTxFrame: " << currentTxFrame << endl;
-    EV << "QUEUE: " << packetQueue.toString() << endl;
-    EV << "We are in: " << fsm.getStateName() << endl;
-
-    auto pkt = dynamic_cast<Packet*>(msg);
-
-    if (msg == nodeAnnounce) {
-        announceNodeId(0);
-        scheduleAfter(5, nodeAnnounce);
-    }
-
-    if (msg == throughputTimer) {
-        // Timer triggered
-        emit(throughputSignal, bytesReceivedInInterval);  // bytes per interval
-        emit(effectiveThroughputSignal, effectiveBytesReceivedInInterval);  // bytes per interval
-        bytesReceivedInInterval = 0;  // reset counter
-        effectiveBytesReceivedInInterval = 0;  // reset counter
-        scheduleAt(simTime() + measurementInterval, throughputTimer);
-        return;
-    }
-
-    FSMA_Switch(fsm){
-
-    FSMA_State(SWITCHING)
+    void MiRS::initializeRtsCtsProtocol()
     {
-        FSMA_Enter(turnOnReceiver();EV<<"Switched To SWITCHING"<<endl;);
-        FSMA_Event_Transition(able-to-listen,
-                msg == mediumStateChange|| msg==shortWait,
-                LISTENING,
-        );
-        FSMA_Event_Transition(we - got - rts - now-- send - cts,
-                msg == initiateCTS && isFreeToSend(),
-                CW_CTS, );
+        fsm.setState(LISTENING);
     }
 
-    FSMA_State(LISTENING)
+    void MiRS::handleWithFsm(cMessage *msg)
     {
-        FSMA_Enter(EV<<"Switched To LISTENING"<<endl;);
-        FSMA_Event_Transition(we-got-rts-now--send-cts,
-                msg==initiateCTS && isFreeToSend(),
-                CW_CTS,
-        );
-        FSMA_Event_Transition(able-to-receive,
-                isReceiving(),
-                RECEIVING,
-        );
-        FSMA_Event_Transition(medium-busy-waiting-it-out,
-                !isMediumFree(),
-                DEFER,
-        );
-        FSMA_Event_Transition(something-to-send-medium-free-start-backoff,
-                currentTxFrame != nullptr && isMediumFree() && isFreeToSend(),
-                BACKOFF,
-        );
-    }
-    FSMA_State(DEFER)
-    {
-        FSMA_Enter(EV<<"Switched To DEFER"<<endl;);
-        FSMA_Event_Transition(something-to-send-medium-free-again,
-                currentTxFrame != nullptr && isMediumFree() && isFreeToSend(),
-                BACKOFF,
-        );
-        FSMA_Event_Transition(nothing-to-send-medium-free-again,
-                currentTxFrame == nullptr && isMediumFree(),
-                LISTENING,
-        );
-        FSMA_Event_Transition(able-to-receive-again,
-                isReceiving(),
-                RECEIVING,
-        );
-        FSMA_Event_Transition(we-got-rts-now--send-cts,
-                msg==initiateCTS && isFreeToSend(),
-                CW_CTS,
-        );
-    }
-    FSMA_State(BACKOFF)
-    {
-        FSMA_Enter(scheduleBackoffTimer();EV<<"Switched To BACKOFF"<<endl;);
-        FSMA_Event_Transition(backoff-finished-send-rts,
-                msg == endBackoff && withRTS(),
-                SEND_RTS,
-                invalidateBackoffPeriod();
-        );
-        FSMA_Event_Transition(backoff-finished-message-without-rts-only-nodeannounce,
-                msg == endBackoff && !withRTS(),
-                TRANSMITING,
-                invalidateBackoffPeriod();
-        );
-        FSMA_Event_Transition(receiving-msg-cancle-backoff-listen-now,
-                isReceiving(),
-                RECEIVING,
-                cancelBackoffTimer();
-                decreaseBackoffPeriod();
-        );
-        FSMA_Event_Transition(we-got-rts-now--send-cts,
-                msg==initiateCTS && isFreeToSend(),
-                CW_CTS,
-                cancelBackoffTimer();
-                decreaseBackoffPeriod();
-        );
-    }
-    FSMA_State(SEND_RTS)
-    {
-        FSMA_Enter(turnOnTransmitter();EV<<"Switched To SEND_RTS"<<endl;);
-        FSMA_Event_Transition(transmitter-is-ready-to-send,
-                msg == transmitSwitchDone,
-                SEND_RTS,
-                sendRTS();
-        );
-        FSMA_Event_Transition(rts-was-sent-now-wait-cts,
-                msg == endTransmission,
-                WAIT_CTS,
-        );
-    }
-    FSMA_State(WAIT_CTS)
-    {
-        FSMA_Enter(turnOnReceiver();EV<<"Switched To WAIT_CTS"<<endl;);
-        FSMA_Event_Transition(we-didnt-get-cts-go-back-to-listening,
-                msg == CTSWaitTimeout,
-                SWITCHING,
-                handleCTSTimeout();
-                scheduleAfter(sifs,shortWait)
+        auto pkt = dynamic_cast<Packet *>(msg);
 
-        );
-        FSMA_Event_Transition(Listening-Receiving,
-                isOurCTS(msg),
-                TRANSMITING,
-                handleCTS(pkt);
-        );
-    }
-    FSMA_State(TRANSMITING)
-    {
-        FSMA_Enter(turnOnTransmitter();EV<<"Switched To TRANSMITING"<<endl;);
-        FSMA_Event_Transition(send-data-now,
-                msg == transmitSwitchDone,
-                TRANSMITING,
-                sendDataFrame();
-        );
-        FSMA_Event_Transition(finished-transmission-turn-to-receiver,
-                msg == endTransmission,
-                SWITCHING,
-                finishCurrentTransmission();
-        );
-    }
-    FSMA_State(CW_CTS)
-    {
-        FSMA_Enter(scheduleCTSCWTimer();EV<<"Switched To CW_CTS"<<endl;);
-        FSMA_Event_Transition(had-to-wait-cw-to-send-cts,
-                msg == ctsCWTimeout && !isReceiving(),
-                SEND_CTS,
-                invalidateCTSCWPeriod();
-        );
-        FSMA_Event_Transition(got-cts-sent-to-same-source-as-we-want-to-send-to,
-                isCTSForSameRTSSource(msg),
-                AWAIT_TRANSMISSION,
-                invalidateCTSCWPeriod();
-                cancelCTSCWTimer();
-                scheduleAfter(sifs, transmissionStartTimeout);
-        );
-        FSMA_Event_Transition(got-packet-from-rts-source,
-                isPacketFromRTSSource(msg),
-                RECEIVING,
-                invalidateCTSCWPeriod();
-                cancelCTSCWTimer();
-        );
-    }
-    FSMA_State(SEND_CTS)
-    {
-        FSMA_Enter(turnOnTransmitter();EV<<"Switched To SEND_CTS"<<endl;);
-        FSMA_Event_Transition(transmitter-on-now-send-cts,
-                msg == transmitSwitchDone,
-                SEND_CTS,
-                sendCTS();
-        );
-        FSMA_Event_Transition(finished-cts-sending-turn-to-receiver,
-                msg == endTransmission,
-                AWAIT_TRANSMISSION,
-        );
-    }
-    FSMA_State(AWAIT_TRANSMISSION)
-    {
-        FSMA_Enter(turnOnReceiver();EV<<"Switched To AWAIT_TRANSMISSION"<<endl;);
-        FSMA_Event_Transition(source-didnt-get-cts-just-go-back-to-regular-listening,
-                msg == transmissionStartTimeout && !isReceiving(),
-                SWITCHING,
-                clearRTSsource();
-                cancelEvent(transmissionEndTimeout);
-                scheduleAfter(sifs,shortWait);
-        );
-        FSMA_Event_Transition(received-packet-check-whether-from-rts-source-then-handle,
-                isPacketFromRTSSource(msg),
-                SWITCHING,
-                handlePacket(pkt);
-                cancelEvent(transmissionStartTimeout);
-                cancelEvent(transmissionEndTimeout);
-                scheduleAfter(sifs,shortWait);
-        );
-        // if we dont do this, we will be stuck here if a node get a message from a node other than the one from rts. should rarely happen
-        FSMA_Event_Transition(got-some-random-message-just-remove-then-go-back-to-listening,
-                msg==transmissionEndTimeout,
-                SWITCHING,
-                scheduleAfter(sifs,shortWait);
-        );
-    }
-    FSMA_State(RECEIVING)
-    {
-        FSMA_Enter(EV<<"Switched To RECEIVING"<<endl;);
-        FSMA_Event_Transition(received-message-handle-keep-listening,
-                isLowerMessage(msg),
-                SWITCHING,
-                handlePacket(pkt);
-                scheduleAfter(sifs,shortWait)
-        );
-        FSMA_Event_Transition(receive-below-sensitivity,
-                msg == droppedPacket,
-                LISTENING,
-        );
-    }
-}
+        FSMA_Switch(fsm)
+        {
+            FSMA_State(SWITCHING)
+            {
+                FSMA_Enter(turnOnReceiver());
+                FSMA_Event_Transition(able to listen,
+                                      msg == mediumStateChange || msg == shortWait,
+                                      LISTENING, );
+                FSMA_Event_Transition(we got rts now-- send cts,
+                                      msg == initiateCTS && isFreeToSend(),
+                                      CW_CTS, );
+            }
+            FSMA_State(LISTENING)
+            {
+                FSMA_Event_Transition(we got rts now-- send cts,
+                                      msg == initiateCTS && isFreeToSend(),
+                                      CW_CTS, );
+                FSMA_Event_Transition(able to receive,
+                                      isReceiving(),
+                                      RECEIVING, );
+                FSMA_Event_Transition(something to send medium free start backoff,
+                                      currentTxFrame != nullptr && isMediumFree() && isFreeToSend(),
+                                      BACKOFF, );
+            }
+            FSMA_State(BACKOFF)
+            {
+                FSMA_Enter(regularBackoff->scheduleBackoffTimer());
+                FSMA_Event_Transition(backoff finished send rts,
+                                      msg == endBackoff && withRTS(),
+                                      SEND_RTS,
+                                      regularBackoff->invalidateBackoffPeriod(););
+                FSMA_Event_Transition(backoff finished message without rts only nodeannounce,
+                                      msg == endBackoff && !withRTS(),
+                                      TRANSMITING,
+                                      regularBackoff->invalidateBackoffPeriod(););
+                FSMA_Event_Transition(receiving msg cancle backoff listen now,
+                                      isReceiving(),
+                                      RECEIVING,
+                                      regularBackoff->cancelBackoffTimer();
+                                      regularBackoff->decreaseBackoffPeriod(););
+                FSMA_Event_Transition(we got rts now - send cts,
+                                      msg == initiateCTS && isFreeToSend(),
+                                      CW_CTS,
+                                      regularBackoff->cancelBackoffTimer();
+                                      regularBackoff->decreaseBackoffPeriod(););
+            }
+            FSMA_State(SEND_RTS)
+            {
+                FSMA_Enter(turnOnTransmitter());
+                FSMA_Event_Transition(transmitter is ready to send,
+                                      msg == transmitSwitchDone,
+                                      SEND_RTS,
+                                      sendRTS(););
+                FSMA_Event_Transition(rts was sent now wait cts,
+                                      msg == endTransmission,
+                                      WAIT_CTS, );
+            }
+            FSMA_State(WAIT_CTS)
+            {
+                FSMA_Enter(turnOnReceiver());
+                FSMA_Event_Transition(we didnt get cts go back to listening,
+                                      msg == CTSWaitTimeout,
+                                      SWITCHING,
+                                      handleCTSTimeout(true);
+                                      scheduleAfter(sifs, shortWait)
 
-    if (fsm.getState() == LISTENING && isFreeToSend() && isMediumFree() && msg != initiateCTS) {
-        if (currentTxFrame != nullptr) {
-            handleWithFsm(moreMessagesToSend);
-        }
-        else if (!packetQueue.isEmpty() && currentTxFrame == nullptr) {
-            EV << "Dequeuing and deleting current tx" << endl;
-            currentTxFrame = packetQueue.dequeuePacket();
-            handleWithFsm(moreMessagesToSend);
-        }
-    }
-//    if (fsm.getState() == RECEIVING || fsm.getState() == WAIT_CTS || fsm.getState() == CW_CTS || fsm.getState() == AWAIT_TRANSMISSION) {
-
-}
-
-void MiRS::handlePacket(Packet *packet)
-{
-    EV << "handlePacket" << endl;
-    bytesReceivedInInterval += packet->getByteLength();
-    Packet *messageFrame = decapsulate(packet);
-    auto chunk = messageFrame->peekAtFront<inet::Chunk>();
-
-    if (auto msg = dynamic_cast<const BroadcastHeader*>(chunk.get())) {
-        int messageId = msg->getMessageId();
-        int source = msg->getSource();
-        int missionId = msg->getMissionId();
-        bool isMissionMsg = msg->getRetransmit();
-
-        // we only care about this message if it is a newer Neighbor Message. If it is an older one then we do not care
-        if (!isMissionMsg && !incompleteNeighbourPktList.isNewIdHigher(source, messageId)) {
-            delete packet;
-            return;
+                );
+                FSMA_Event_Transition(Listening Receiving,
+                                      isOurCTS(msg),
+                                      TRANSMITING,
+                                      handleCTS(pkt););
+            }
+            FSMA_State(TRANSMITING)
+            {
+                FSMA_Enter(turnOnTransmitter());
+                FSMA_Event_Transition(send data now,
+                                      msg == transmitSwitchDone,
+                                      TRANSMITING,
+                                      sendDataFrame(););
+                FSMA_Event_Transition(finished transmission turn to receiver,
+                                      msg == endTransmission,
+                                      SWITCHING,
+                                      finishCurrentTransmission(););
+            }
+            FSMA_State(CW_CTS)
+            {
+                FSMA_Enter(ctsBackoff->scheduleBackoffTimer());
+                FSMA_Event_Transition(had to wait cw to send cts,
+                                      msg == ctsCWTimeout && !isReceiving(),
+                                      SEND_CTS,
+                                      ctsBackoff->invalidateBackoffPeriod(););
+                FSMA_Event_Transition(got cts sent to same source as we want to send to,
+                                      isCTSForSameRTSSource(msg),
+                                      AWAIT_TRANSMISSION,
+                                      ctsBackoff->invalidateBackoffPeriod();
+                                      ctsBackoff->cancelBackoffTimer();
+                                      scheduleAfter(sifs, transmissionStartTimeout););
+                FSMA_Event_Transition(got packet from rts source,
+                                      isPacketFromRTSSource(msg),
+                                      RECEIVING,
+                                      ctsBackoff->invalidateBackoffPeriod();
+                                      ctsBackoff->cancelBackoffTimer(););
+            }
+            FSMA_State(SEND_CTS)
+            {
+                FSMA_Enter(turnOnTransmitter());
+                FSMA_Event_Transition(transmitter on now send cts,
+                                      msg == transmitSwitchDone,
+                                      SEND_CTS,
+                                      sendCTS(false););
+                FSMA_Event_Transition(finished cts sending turn to receiver,
+                                      msg == endTransmission,
+                                      AWAIT_TRANSMISSION, );
+            }
+            FSMA_State(AWAIT_TRANSMISSION)
+            {
+                FSMA_Enter(turnOnReceiver());
+                FSMA_Event_Transition(source didnt get cts just go back to regular listening,
+                                      msg == transmissionStartTimeout && !isReceiving(),
+                                      SWITCHING,
+                                      clearRTSsource();
+                                      cancelEvent(transmissionEndTimeout);
+                                      scheduleAfter(sifs, shortWait););
+                FSMA_Event_Transition(received packet check whether from rts source then handle,
+                                      isPacketFromRTSSource(msg),
+                                      SWITCHING,
+                                      handlePacket(pkt);
+                                      cancelEvent(transmissionStartTimeout);
+                                      cancelEvent(transmissionEndTimeout);
+                                      scheduleAfter(sifs, shortWait););
+                FSMA_Event_Transition(got some random message just remove then go back to listening,
+                                      msg == transmissionEndTimeout,
+                                      SWITCHING,
+                                      scheduleAfter(sifs, shortWait););
+            }
+            FSMA_State(RECEIVING)
+            {
+                FSMA_Event_Transition(received message handle keep listening,
+                                      isLowerMessage(msg),
+                                      SWITCHING,
+                                      handlePacket(pkt);
+                                      scheduleAfter(sifs, shortWait));
+            }
         }
 
-        // we only care about this message if it is a newer Mission Message. If it is an older one then we do not care.
-        // For continuous Header we care, because we are able to get fragments in different sequence and we only want
-        // to get the ones which we still not have gotten
-        if (isMissionMsg && !incompleteMissionPktList.isNewIdHigher(source, missionId)) {
-            delete packet;
-            return;
+        if (fsm.getState() == LISTENING && isFreeToSend() && isMediumFree() && msg != initiateCTS)
+        {
+            if (currentTxFrame != nullptr)
+            {
+                handleWithFsm(moreMessagesToSend);
+            }
+            else if (!packetQueue.isEmpty() && currentTxFrame == nullptr)
+            {
+                currentTxFrame = packetQueue.dequeuePacket();
+                handleWithFsm(moreMessagesToSend);
+            }
         }
+    }
 
-        auto infoTag = messageFrame->getTag<MessageInfoTag>();
+    void MiRS::handlePacket(Packet *packet)
+    {
+        decapsulate(packet);
+        auto chunk = packet->peekAtFront<inet::Chunk>();
 
-        FragmentedPacket incompletePacket;
-        incompletePacket.messageId = messageId;
-        incompletePacket.missionId = missionId;
-        incompletePacket.sourceNode = source;
-        incompletePacket.size = msg->getSize();
-        incompletePacket.lastHop = msg->getHop();
-        incompletePacket.received = 0;
-        incompletePacket.corrupted = false;
-        incompletePacket.retransmit = msg->getRetransmit();
+        if (auto msg = dynamic_cast<const BroadcastHeader *>(chunk.get()))
+        {
+            int messageId = msg->getMessageId();
+            int source = msg->getSource();
+            int missionId = msg->getMissionId();
+            bool isMissionMsg = msg->getRetransmit();
 
-        if (isMissionMsg) {
-            incompleteMissionPktList.addPacket(incompletePacket);
-            incompleteMissionPktList.updatePacketId(source, missionId);
+            if (!isMissionMsg && !incompleteNeighbourPktList.isNewIdHigher(source, messageId))
+            {
+                delete packet;
+                return;
+            }
+
+            if (isMissionMsg && !incompleteMissionPktList.isNewIdHigher(source, missionId))
+            {
+                delete packet;
+                return;
+            }
+
+            auto infoTag = packet->getTag<MessageInfoTag>();
+
+            FragmentedPacket incompletePacket;
+            incompletePacket.messageId = messageId;
+            incompletePacket.missionId = missionId;
+            incompletePacket.sourceNode = source;
+            incompletePacket.size = msg->getSize();
+            incompletePacket.lastHop = msg->getHop();
+            incompletePacket.received = 0;
+            incompletePacket.corrupted = false;
+            incompletePacket.retransmit = msg->getRetransmit();
+
+            addPacketToList(incompletePacket, isMissionMsg);
+
+            if (infoTag->getWithRTS())
+            {
+                int sizeOfFragment = msg->getSize() > 255 - BROADCAST_FRAGMENT_META_SIZE ? 255 : msg->getSize() + BROADCAST_FRAGMENT_META_SIZE;
+                scheduleAfter(0, initiateCTS);
+                sizeOfFragment_CTSData = sizeOfFragment;
+                sourceOfRTS_CTSData = msg->getHop();
+                setRTSsource(msg->getHop());
+            }
         }
-        else {
+        else if (auto msg = dynamic_cast<const BroadcastLeaderFragment *>(chunk.get()))
+        {
+            int messageId = msg->getMessageId();
+            int source = msg->getSource();
+            int missionId = msg->getMissionId();
+
+            if (!incompleteNeighbourPktList.isNewIdHigher(source, messageId))
+            {
+                delete packet;
+                return;
+            }
+
+            FragmentedPacket incompletePacket;
+            incompletePacket.messageId = messageId;
+            incompletePacket.missionId = missionId;
+            incompletePacket.sourceNode = source;
+            incompletePacket.size = msg->getSize();
+            incompletePacket.lastHop = msg->getHop();
+            incompletePacket.received = 0;
+            incompletePacket.corrupted = false;
+            incompletePacket.retransmit = msg->getRetransmit();
+
             incompleteNeighbourPktList.addPacket(incompletePacket);
             incompleteNeighbourPktList.updatePacketId(source, messageId);
+
+            // wir senden schon mit dem ersten packet daten
+            BroadcastFragment *fragmentPayload = new BroadcastFragment();
+            fragmentPayload->setChunkLength(msg->getChunkLength());
+            fragmentPayload->setPayloadSize(msg->getPayloadSize());
+            fragmentPayload->setMessageId(messageId);
+            fragmentPayload->setMissionId(missionId);
+            fragmentPayload->setSource(source);
+            fragmentPayload->setFragmentId(0);
+
+            Result result = addToIncompletePacket(fragmentPayload, false);
+            retransmitPacket(result);
+            delete fragmentPayload;
         }
+        else if (auto msg = dynamic_cast<const BroadcastContinuousHeader *>(chunk.get()))
+        {
+            int messageId = msg->getMessageId();
+            int source = msg->getSource();
+            int missionId = msg->getMissionId();
 
-        if (infoTag->getWithRTS()) {
-            int sizeOfFragment = msg->getSize() > 255 - BROADCAST_FRAGMENT_META_SIZE ? 255 : msg->getSize() + BROADCAST_FRAGMENT_META_SIZE;
-            scheduleAfter(0, initiateCTS);
-            sizeOfFragment_CTSData = sizeOfFragment;
-            sourceOfRTS_CTSData = msg->getHop();
-            setRTSsource(msg->getHop());
-        }
-    }
-    else if (auto msg = dynamic_cast<const BroadcastLeaderFragment*>(chunk.get())) {
-        effectiveBytesReceivedInInterval += packet->getByteLength() - BROADCAST_LEADER_FRAGMENT_META_SIZE;
-
-        int messageId = msg->getMessageId();
-        int source = msg->getSource();
-        int missionId = msg->getMissionId();
-
-        if (!incompleteNeighbourPktList.isNewIdHigher(source, messageId)) {
-            delete packet;
-            EV << "Id not higher!!" << endl;
-
-            return;
-        }
-
-        FragmentedPacket incompletePacket;
-        incompletePacket.messageId = messageId;
-        incompletePacket.missionId = missionId;
-        incompletePacket.sourceNode = source;
-        incompletePacket.size = msg->getSize();
-        incompletePacket.lastHop = msg->getHop();
-        incompletePacket.received = 0;
-        incompletePacket.corrupted = false;
-        incompletePacket.retransmit = msg->getRetransmit();
-
-        incompleteNeighbourPktList.addPacket(incompletePacket);
-        incompleteNeighbourPktList.updatePacketId(source, messageId);
-
-        // wir senden schon mit dem ersten packet daten
-        BroadcastFragment *fragmentPayload = new BroadcastFragment();
-        fragmentPayload->setChunkLength(msg->getChunkLength());
-        fragmentPayload->setPayloadSize(msg->getPayloadSize());
-        fragmentPayload->setMessageId(messageId);
-        fragmentPayload->setMissionId(missionId);
-        fragmentPayload->setSource(source);
-        fragmentPayload->setFragmentId(0);
-
-        Result result;
-        result = incompleteNeighbourPktList.addToIncompletePacket(fragmentPayload);
-
-        if (result.isComplete) {
-            EV << "Neighbour message complete!" << endl;
-            if (result.sendUp) {
-                cMessage *readyMsg = new cMessage("Ready");
-                sendUp(readyMsg);
-                retransmitPacket(result.completePacket);
-            }
-
-            incompleteNeighbourPktList.removePacketById(messageId);
-            simtime_t time = timeOfLastTrajectory.calcAgeOfInformation(source, simTime());
-            emit(timeOfLastTrajectorySignal, time);
-            timeOfLastTrajectory.addTime(source, simTime());
-
-        }
-        else {
-
-            EV << "Neighbour message NOT complete!" << endl;
-
-        }
-        delete fragmentPayload;
-
-    }
-    else if (auto msg = dynamic_cast<const BroadcastContinuousHeader*>(chunk.get())) {
-        // We can only have gotten this BroadcastContinuousHeader if we are not receiving anything else soon.
-        // Otherwise we would have sent CTS and the node would have gotten it
-
-        int messageId = msg->getMessageId();
-        int source = msg->getSource();
-        int missionId = msg->getMissionId();
-
-        // TODO: need to check if we have already gotten this fragment for that message. It can be from a different hop: again, we can get
-        // fragments from different nodes and not in order
-        if (incompleteMissionPktList.isNewIdSame(source, missionId) || incompleteNeighbourPktList.isNewIdSame(source, messageId)) {
-            scheduleAfter(0, initiateCTS);
-            sizeOfFragment_CTSData = msg->getPayloadSizeOfNextFragment(); // TODO
-            sourceOfRTS_CTSData = msg->getHopId();
-            setRTSsource(msg->getHopId());
-        }
-    }
-    else if (auto msg = dynamic_cast<const BroadcastFragment*>(chunk.get())) {
-        EV << "Received BroadcastFragment" << endl;
-        effectiveBytesReceivedInInterval += packet->getByteLength() - BROADCAST_FRAGMENT_META_SIZE;
-
-        int messageId = msg->getMessageId();
-        int source = msg->getSource();
-        int missionId = msg->getMissionId();
-        auto typeTag = messageFrame->getTag<MessageInfoTag>();
-        bool isMissionMsg = !typeTag->isNeighbourMsg();
-
-        // We do check if we have started this packet with a header in the function
-        Result result;
-        if (isMissionMsg)
-            result = incompleteMissionPktList.addToIncompletePacket(msg);
-        else
-            result = incompleteNeighbourPktList.addToIncompletePacket(msg);
-
-        if (result.isComplete) {
-            if (result.sendUp) {
-                cMessage *readyMsg = new cMessage("Ready");
-                sendUp(readyMsg);
-                retransmitPacket(result.completePacket);
-            }
-            if (isMissionMsg)
-                incompleteMissionPktList.removePacketById(missionId);
-            else {
-                incompleteNeighbourPktList.removePacketById(messageId);
-                simtime_t time = timeOfLastTrajectory.calcAgeOfInformation(source, simTime());
-                emit(timeOfLastTrajectorySignal, time);
-                timeOfLastTrajectory.addTime(source, simTime());
-            }
-        }
-    }
-    else if (auto msg = dynamic_cast<const BroadcastCTS*>(chunk.get())) {
-        EV << "Received BroadcastCTS" << endl;
-        // we are only here if we did not request the CTS
-        ASSERT(msg->getHopId() != nodeId);
-        int size = msg->getSizeOfFragment();
-        if (endOngoingMsg->isScheduled()) {
-            cancelEvent(endOngoingMsg);
-        }
-        ASSERT(size > 0);
-        scheduleAfter(predictOngoingMsgTime(size) + sifs, endOngoingMsg);
-    }
-    delete packet;
-}
-
-void MiRS::handleSelfMessage(cMessage *msg)
-{
-    EV << "handleSelfMessage" << endl;
-    handleWithFsm(msg);
-}
-
-void MiRS::handleUpperPacket(Packet *packet)
-{
-    EV << "handleUpperPacket" << endl;
-    const auto &payload = packet->peekAtFront<LoRaRobotPacket>();
-    bool isMission = payload->isMission();
-
-    if (isMission)
-        createBroadcastPacket(packet->getByteLength(), -1, -1, true);
-    else
-        createNeighbourPacket(packet->getByteLength(), -1, false);
-
-    if (currentTxFrame == nullptr) {
-        Packet *packetToSend = packetQueue.dequeuePacket();
-        currentTxFrame = packetToSend;
-    }
-    handleWithFsm(gotNewMessagToSend);
-    delete packet;
-}
-
-void MiRS::handleLowerPacket(Packet *msg)
-{
-    EV << "handleLowerPacket" << endl;
-    if (fsm.getState() == RECEIVING || fsm.getState() == WAIT_CTS || fsm.getState() == CW_CTS || fsm.getState() == AWAIT_TRANSMISSION) {
-        handleWithFsm(msg);
-    }
-    else {
-        EV << "Received MSG while not in RECEIVING/WAIT_CTS state" << endl;
-        delete msg;
-    }
-}
-
-void MiRS::handleCanPullPacketChanged(cGate *gate)
-{
-    EV << "handleCanPullPacketChanged" << endl;
-    Enter_Method("handleCanPullPacketChanged");
-    Packet *packet = dequeuePacket();
-    handleUpperMessage(packet);
-}
-
-void MiRS::handlePullPacketProcessed(Packet *packet, cGate *gate, bool successful)
-{
-    EV << "handlePullPacketProcessed" << endl;
-    Enter_Method("handlePullPacketProcessed");
-    throw cRuntimeError("Not supported callback");
-}
-
-void MiRS::receiveSignal(cComponent *source, simsignal_t signalID, intval_t value, cObject *details)
-{
-    EV << "receiveSignal" << endl;
-    Enter_Method_Silent();
-    if (signalID == IRadio::receptionStateChangedSignal) {
-        IRadio::ReceptionState newRadioReceptionState = (IRadio::ReceptionState) value;
-        handleWithFsm(mediumStateChange);
-        receptionState = newRadioReceptionState;
-    }
-    else if (signalID == LoRaRadio::droppedPacket) {
-        radio->setRadioMode(IRadio::RADIO_MODE_RECEIVER);
-        handleWithFsm(droppedPacket);
-    }
-    else if (signalID == IRadio::transmissionStateChangedSignal) {
-        IRadio::TransmissionState newRadioTransmissionState = (IRadio::TransmissionState) value;
-        if (transmissionState == IRadio::TRANSMISSION_STATE_TRANSMITTING && newRadioTransmissionState == IRadio::TRANSMISSION_STATE_IDLE) {
-            transmissionState = newRadioTransmissionState;
-            handleWithFsm(endTransmission);
-        }
-
-        if (transmissionState == IRadio::TRANSMISSION_STATE_UNDEFINED && newRadioTransmissionState == IRadio::TRANSMISSION_STATE_IDLE) {
-            transmissionState = newRadioTransmissionState;
-            handleWithFsm(transmitSwitchDone);
-        }
-        transmissionState = newRadioTransmissionState;
-    }
-    EV << "endReceiveSignal" << endl;
-}
-
-// ================================================================================================
-// ================================================================================================
-
-// ================================================================================================
-// Sending Functions
-// ================================================================================================
-
-void MiRS::sendDataFrame()
-{
-    EV << "sendDataFrame" << endl;
-    auto frameToSend = getCurrentTransmission();
-    EV << "sendDataFrame: " << frameToSend << endl;
-    sendDown(frameToSend->dup());
-
-    if (idToAddedTimeMap.find(frameToSend->getId()) != idToAddedTimeMap.end()) {
-        SimTime previousTime = idToAddedTimeMap[frameToSend->getId()];
-        SimTime delta = simTime() - previousTime;
-        emit(timeInQueue, delta);
-    }
-
-    auto typeTag = frameToSend->getTag<MessageInfoTag>();
-    int missionId = typeTag->getMissionId();
-    if (typeTag->isNeighbourMsg())
-        return;
-
-    if (typeTag->isHeader()) {
-        if (!missionIdRtsSentTracker.contains(missionId)) {
-            // We are here if we want to the send RTS for the first time for MissionId
-            emit(missionIdRtsSent, missionId);
-            missionIdRtsSentTracker.add(missionId);
-            return;
-        }
-    }
-    else {
-        // We are only here if we send first fragment of message
-        if (!missionIdFragmentSentTracker.contains(missionId)) {
+            if (incompleteMissionPktList.isNewIdSame(source, missionId) || incompleteNeighbourPktList.isNewIdSame(source, messageId))
             {
-                emit(missionIdFragmentSent, missionId);
-                missionIdFragmentSentTracker.add(missionId);
-
+                scheduleAfter(0, initiateCTS);
+                sizeOfFragment_CTSData = msg->getPayloadSizeOfNextFragment(); // TODO
+                sourceOfRTS_CTSData = msg->getHopId();
+                setRTSsource(msg->getHopId());
             }
         }
-    }
-}
+        else if (auto msg = dynamic_cast<const BroadcastFragment *>(chunk.get()))
+        {
+            int missionId = msg->getMissionId();
+            auto typeTag = packet->getTag<MessageInfoTag>();
+            bool isMissionMsg = !typeTag->isNeighbourMsg();
 
-void MiRS::announceNodeId(int respond)
-{
-    EV << "announceNodeId" << endl;
-    auto nodeAnnouncePacket = new Packet("NodeAnnouncePacket");
-    auto nodeAnnouncePayload = makeShared<NodeAnnounce>();
-    nodeAnnouncePayload->setChunkLength(B(NODE_ANNOUNCE_SIZE));
-    nodeAnnouncePayload->setLastHop(nodeId);
-    nodeAnnouncePayload->setNodeId(nodeId);
-    nodeAnnouncePayload->setRespond(respond);
-
-    nodeAnnouncePacket->insertAtBack(nodeAnnouncePayload);
-    nodeAnnouncePacket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
-
-    auto messageInfoTag = nodeAnnouncePacket->addTagIfAbsent<MessageInfoTag>();
-    messageInfoTag->setIsNeighbourMsg(false);
-    messageInfoTag->setWithRTS(false);
-    messageInfoTag->setIsNodeAnnounce(true);
-
-    auto fragmentEncap = encapsulate(nodeAnnouncePacket);
-    packetQueue.enqueueNodeAnnounce(fragmentEncap);
-}
-
-void MiRS::retransmitPacket(FragmentedPacket fragmentedPacket)
-{
-    EV << "retransmitPacket" << endl;
-// jedes feld muss gleich sein vom fragemntierten packet außer lastHop
-    if (!fragmentedPacket.retransmit || fragmentedPacket.sourceNode == nodeId) {
-        return;
-    }
-    emit(receivedMissionId, fragmentedPacket.missionId);
-    createBroadcastPacket(fragmentedPacket.size, fragmentedPacket.missionId, fragmentedPacket.sourceNode, fragmentedPacket.retransmit);
-}
-
-// ================================================================================================
-// ================================================================================================
-
-// ================================================================================================
-// RTS/CTS Mechanism
-// ================================================================================================
-
-// We do not have to do anything else with cts
-void MiRS::handleCTS(Packet *pkt)
-{
-    EV << "handleCTS" << endl;
-    cancelEvent(CTSWaitTimeout);
-    delete pkt;
-    EV << "END handleCTS" << endl;
-}
-
-// Put packet back to queue at front and currentTxFrame is the header again, to try once again. After 3 tries delete the packet
-void MiRS::handleCTSTimeout()
-{
-    EV << "handleCTSTimeout" << endl;
-    auto frameToSend = getCurrentTransmission();
-    auto infoTag = frameToSend->getTagForUpdate<MessageInfoTag>();
-    auto frag = frameToSend->peekAtFront<BroadcastFragment>();
-
-    int newTries = infoTag->getTries() + 1;
-    infoTag->setTries(newTries);
-    if (newTries >= 3) {
-        deleteCurrentTxFrame();
-        if (!packetQueue.isEmpty()) {
-            currentTxFrame = packetQueue.dequeuePacket();
+            Result result = addToIncompletePacket(msg, isMissionMsg);
+            retransmitPacket(result);
         }
-        EV << "PRE END handleCTSTimeout" << endl;
-        cwBackoff = 8;
-        return;
-    }
-    packetQueue.enqueuePacketAtPosition(frameToSend, 0);
-
-    cwBackoff = cwBackoff * std::pow(2,newTries);
-
-    ASSERT(frag != nullptr);
-    ASSERT(infoTag->getPayloadSize() != -1);
-    if (infoTag->getHasRegularHeader()) {
-        currentTxFrame = createHeader(frag->getMissionId(), frag->getSource(), infoTag->getPayloadSize(), !infoTag->isNeighbourMsg());
-    }
-    else {
-        currentTxFrame = createContinuousHeader(frag->getMissionId(), frag->getSource(), infoTag->getPayloadSize(), !infoTag->isNeighbourMsg());
-    }
-    EV << "END handleCTSTimeout" << endl;
-}
-
-bool MiRS::withRTS()
-{
-    EV << "withRTS" << endl;
-    auto frameToSend = getCurrentTransmission();
-    auto infoTag = frameToSend->getTag<MessageInfoTag>();
-    return infoTag->getWithRTS();
-}
-
-bool MiRS::isOurCTS(cMessage *msg)
-{
-    EV << "isOurCTS: " << msg << endl;
-    auto pkt = dynamic_cast<Packet*>(msg);
-    if (pkt != nullptr) {
-        Packet *messageFrame = decapsulate(pkt);
-        auto chunk = messageFrame->peekAtFront<inet::Chunk>();
-        if (auto msg = dynamic_cast<const BroadcastCTS*>(chunk.get())) {
-            EV << "We got CTS" << endl;
-            if (msg->getHopId() == nodeId) {
-                return true;
+        else if (auto msg = dynamic_cast<const BroadcastCTS *>(chunk.get()))
+        {
+            ASSERT(msg->getHopId() != nodeId);
+            int size = msg->getSizeOfFragment();
+            if (endOngoingMsg->isScheduled())
+            {
+                cancelEvent(endOngoingMsg);
             }
+            ASSERT(size > 0);
+            scheduleAfter(predictOngoingMsgTime(size) + sifs, endOngoingMsg);
+        }
+        delete packet;
+    }
+
+    void MiRS::handleLowerPacket(Packet *msg)
+    {
+        if (fsm.getState() == RECEIVING || fsm.getState() == WAIT_CTS || fsm.getState() == CW_CTS || fsm.getState() == AWAIT_TRANSMISSION)
+        {
+            handleWithFsm(msg);
+        }
+        else
+        {
+            delete msg;
         }
     }
-    EV << "END isOurCTS" << endl;
-    if (!msg->isSelfMessage()) {
-        delete msg;
-    }
-    return false;
-}
 
-bool MiRS::isCTSForSameRTSSource(cMessage *msg)
-{
-    EV << "isCTSForSameRTSSource: " << msg << endl;
-
-    auto pkt = dynamic_cast<Packet*>(msg);
-    if (pkt != nullptr) {
-        Packet *messageFrame = decapsulate(pkt);
-        auto chunk = messageFrame->peekAtFront<inet::Chunk>();
-        if (auto msg = dynamic_cast<const BroadcastCTS*>(chunk.get())) {
-            if (msg->getHopId() == rtsSource) {
-                EV << "We got CTS addressed to the same node that we want to send to. Stop our CW and listen now for the packet" << endl;
-                return true;
-            }
+    void MiRS::createPacket(int payloadSize, int missionId, int source, bool retransmit)
+    {
+        if (retransmit)
+        {
+            createBroadcastPacketWithContinuousRTS(payloadSize, missionId, source, retransmit);
         }
-    }
-    EV << "END isCTSForSameRTSSource" << endl;
-    return false;
-}
-
-void MiRS::sendRTS()
-{
-    EV << "sendRTS" << endl;
-    auto header = getCurrentTransmission();
-    auto typeTag = header->getTag<MessageInfoTag>();
-    ASSERT(typeTag->isHeader());
-
-    // TODO +ctsFS
-    scheduleAfter(ctsFS * cwCTS + sifs + predictOngoingMsgTime(header->getByteLength()) + ctsFS, CTSWaitTimeout);
-    sendDown(header->dup());
-    delete header;
-
-    ASSERT(!packetQueue.isEmpty());
-    currentTxFrame = packetQueue.dequeuePacket();
-}
-
-void MiRS::sendCTS()
-{
-    EV << "sendCTS" << endl;
-    auto ctsPacket = new Packet("BroadcastCTS");
-    auto ctsPayload = makeShared<BroadcastCTS>();
-
-    ASSERT(sourceOfRTS_CTSData > 0 && sizeOfFragment_CTSData > 0);
-    ctsPayload->setChunkLength(B(BROADCAST_CTS));
-    ctsPayload->setSizeOfFragment(sizeOfFragment_CTSData);
-    ctsPayload->setHopId(sourceOfRTS_CTSData);
-
-    ctsPacket->insertAtBack(ctsPayload);
-    ctsPacket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
-    ctsPacket->addTagIfAbsent<MessageInfoTag>()->setIsNeighbourMsg(false);
-    encapsulate(ctsPacket);
-    sendDown(ctsPacket->dup());
-    delete ctsPacket;
-
-    // After we send CTS, we need to receive message within ctsFS + sifs otherwise we assume there will be no message
-    scheduleAfter(ctsFS + sifs, transmissionStartTimeout);
-    scheduleAfter(ctsFS + sifs + predictOngoingMsgTime(sizeOfFragment_CTSData), transmissionEndTimeout);
-    sizeOfFragment_CTSData = -1;
-    sourceOfRTS_CTSData = -1;
-}
-
-void MiRS::clearRTSsource()
-{
-    EV << "clearRTSsource" << endl;
-    rtsSource = -1;
-}
-
-void MiRS::setRTSsource(int rtsSourceId)
-{
-    EV << "setRTSsource" << endl;
-    rtsSource = rtsSourceId;
-}
-
-bool MiRS::isPacketFromRTSSource(cMessage *msg)
-{
-    EV << "isPacketFromRTSSource" << endl;
-    if (!isLowerMessage(msg)) {
-        return false;
-    }
-
-    auto packet = dynamic_cast<Packet*>(msg->dup());
-    EV << "Tags packet: " << packet->getTags() << endl;
-    Packet *messageFrame = decapsulate(packet);
-    auto chunk = messageFrame->peekAtFront<inet::Chunk>();
-
-    EV << "messageFrame packet: " << messageFrame->getTags() << endl;
-
-    if (auto fragment = dynamic_cast<const BroadcastFragment*>(chunk.get())) {
-        EV << "Tags fragment: " << fragment->getNumTags() << endl;
-        auto infoTag = packet->getTag<MessageInfoTag>();
-        if (infoTag->getHopId() == rtsSource) {
-            clearRTSsource();
-            delete packet;
-            return true;
-        }
-    }
-    delete packet;
-    delete msg;
-    return false;
-}
-
-// ================================================================================================
-// ================================================================================================
-
-// ================================================================================================
-// Packet Creation
-// ================================================================================================
-
-// TODO: if we want to send Neighbour broadcast, then we dont need a separat header. Or just send leader fragment
-void MiRS::createBroadcastPacket(int payloadSize, int missionId, int source, bool retransmit)
-{
-    EV << "createBroadcastPacket" << endl;
-
-    if (source == -1) {
-        source = nodeId;
-    }
-
-    Packet *headerPaket = createHeader(missionId, source, payloadSize, retransmit);
-
-    if (missionId == -1) {
-        missionId = headerPaket->getId();
-    }
-    int messageId = headerPaket->getId();
-
-    bool trackQueueTime = packetQueue.enqueuePacket(headerPaket);
-    if (trackQueueTime) {
-        // only track queue time for packets that were inserted at the back
-        idToAddedTimeMap[headerPaket->getId()] = simTime();
-    }
-
-    int i = 0;
-    while (payloadSize > 0) {
-        bool hasRegularHeader = true;
-        if (i > 0) {
-            Packet *continuousHeader = createContinuousHeader(missionId, source, payloadSize, retransmit);
-            packetQueue.enqueuePacket(continuousHeader);
-            hasRegularHeader = false;
-        }
-
-        auto fragmentPacket = new Packet("BroadcastFragmentPkt");
-        auto fragmentPayload = makeShared<BroadcastFragment>();
-
-        int currentPayloadSize = 0;
-        if (payloadSize + BROADCAST_FRAGMENT_META_SIZE > 255) {
-            currentPayloadSize = 255 - BROADCAST_FRAGMENT_META_SIZE;
-            fragmentPayload->setChunkLength(B(255));
-            fragmentPayload->setPayloadSize(currentPayloadSize);
-            payloadSize = payloadSize - currentPayloadSize;
-        }
-        else {
-            currentPayloadSize = payloadSize;
-            fragmentPayload->setChunkLength(B(currentPayloadSize + BROADCAST_FRAGMENT_META_SIZE));
-            fragmentPayload->setPayloadSize(currentPayloadSize);
-            payloadSize = 0;
-        }
-
-        fragmentPayload->setMissionId(missionId);
-        fragmentPayload->setMessageId(messageId);
-        fragmentPayload->setSource(source);
-        fragmentPayload->setFragmentId(i++);
-        fragmentPacket->insertAtBack(fragmentPayload);
-        fragmentPacket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
-
-        auto messageInfoTag = fragmentPacket->addTagIfAbsent<MessageInfoTag>();
-        messageInfoTag->setIsNeighbourMsg(!retransmit);
-        messageInfoTag->setMissionId(missionId);
-        messageInfoTag->setIsHeader(false);
-        messageInfoTag->setHopId(nodeId);
-        messageInfoTag->setHasUsefulData(true);
-        messageInfoTag->setPayloadSize(currentPayloadSize);
-        messageInfoTag->setWithRTS(retransmit);
-        messageInfoTag->setHasRegularHeader(hasRegularHeader);
-
-        encapsulate(fragmentPacket);
-
-        packetQueue.enqueuePacket(fragmentPacket);
-        if (trackQueueTime) {
-            // only track queue time for packets that were inserted at the back
-            idToAddedTimeMap[fragmentPacket->getId()] = simTime();
+        else
+        {
+            createNeighbourPacket(payloadSize, missionId, source);
         }
     }
 }
-
-void MiRS::createNeighbourPacket(int payloadSize, int source, bool retransmit)
-{
-    auto headerPaket = new Packet("BroadcastLeaderFragment");
-    auto headerPayload = makeShared<BroadcastLeaderFragment>();
-    int messageId = headerPaket->getId();
-    int fullPayloadSize = payloadSize;
-
-    if (source == -1) {
-        source = nodeId;
-    }
-
-    headerPayload->setChunkLength(B(payloadSize + BROADCAST_LEADER_FRAGMENT_META_SIZE));
-    headerPayload->setPayloadSize(payloadSize);
-    headerPayload->setSize(fullPayloadSize);
-    headerPayload->setMessageId(messageId);
-    headerPayload->setMissionId(-1);
-    headerPayload->setSource(source);
-    headerPayload->setHop(nodeId);
-    headerPayload->setRetransmit(retransmit);
-    headerPaket->insertAtBack(headerPayload);
-    headerPaket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
-
-    auto messageInfoTag = headerPaket->addTagIfAbsent<MessageInfoTag>();
-    messageInfoTag->setIsNeighbourMsg(true);
-    messageInfoTag->setMissionId(-1);
-    messageInfoTag->setIsHeader(true);
-    messageInfoTag->setHasUsefulData(true);
-    messageInfoTag->setPayloadSize(payloadSize);
-    messageInfoTag->setWithRTS(false);
-
-    encapsulate(headerPaket);
-
-    bool trackQueueTime = packetQueue.enqueuePacket(headerPaket);
-    if (trackQueueTime) {
-        idToAddedTimeMap[headerPaket->getId()] = simTime();
-    }
-}
-
-Packet* MiRS::createHeader(int missionId, int source, int payloadSize, bool retransmit)
-{
-    EV << "createHeader" << endl;
-
-    Packet *headerPaket = new Packet("BroadcastHeaderPkt");
-
-    if (missionId == -1) {
-        missionId = headerPaket->getId();
-    }
-
-    auto headerPayload = makeShared<BroadcastHeader>();
-    headerPayload->setChunkLength(B(BROADCAST_HEADER_SIZE));
-    headerPayload->setSize(payloadSize);
-    headerPayload->setMissionId(missionId);
-    headerPayload->setMessageId(headerPaket->getId());
-    headerPayload->setSource(source);
-    headerPayload->setHop(nodeId);
-    headerPayload->setRetransmit(retransmit);
-    headerPaket->insertAtBack(headerPayload);
-    headerPaket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
-
-    auto messageInfoTag = headerPaket->addTagIfAbsent<MessageInfoTag>();
-    messageInfoTag->setIsNeighbourMsg(!retransmit);
-    messageInfoTag->setMissionId(missionId);
-    messageInfoTag->setIsHeader(true);
-    messageInfoTag->setWithRTS(retransmit);
-
-    encapsulate(headerPaket);
-    return headerPaket;
-}
-
-Packet* MiRS::createContinuousHeader(int missionId, int source, int payloadSize, bool retransmit)
-{
-    EV << "createContinuousHeader" << endl;
-    Packet *headerPaket = new Packet("BroadcastContinuousHeader");
-
-    if (missionId == -1) {
-        missionId = headerPaket->getId();
-    }
-
-    auto headerPayload = makeShared<BroadcastContinuousHeader>();
-    headerPayload->setChunkLength(B(BROADCAST_CONTINIOUS_HEADER));
-    headerPayload->setPayloadSizeOfNextFragment(payloadSize + BROADCAST_FRAGMENT_META_SIZE);
-    headerPayload->setHopId(nodeId);
-    headerPayload->setMessageId(headerPaket->getId());
-    headerPaket->insertAtBack(headerPayload);
-    headerPaket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
-
-    auto messageInfoTag = headerPaket->addTagIfAbsent<MessageInfoTag>();
-    messageInfoTag->setIsNeighbourMsg(!retransmit);
-    messageInfoTag->setMissionId(missionId);
-    messageInfoTag->setIsHeader(true);
-    messageInfoTag->setWithRTS(retransmit);
-
-    encapsulate(headerPaket);
-    return headerPaket;
-}
-
-Packet* MiRS::encapsulate(Packet *msg)
-{
-    EV << "encapsulate" << endl;
-    auto frame = makeShared<LoRaMacFrame>();
-    frame->setChunkLength(B(0));
-    msg->setArrival(msg->getArrivalModuleId(), msg->getArrivalGateId());
-
-    auto tag = msg->addTagIfAbsent<LoRaTag>();
-    tag->setBandwidth(loRaRadio->loRaBW);
-    tag->setCenterFrequency(loRaRadio->loRaCF);
-    tag->setSpreadFactor(loRaRadio->loRaSF);
-    tag->setCodeRendundance(loRaRadio->loRaCR);
-    tag->setPower(mW(math::dBmW2mW(loRaRadio->loRaTP)));
-
-    frame->setTransmitterAddress(address);
-    frame->setLoRaTP(loRaRadio->loRaTP);
-    frame->setLoRaCF(loRaRadio->loRaCF);
-    frame->setLoRaSF(loRaRadio->loRaSF);
-    frame->setLoRaBW(loRaRadio->loRaBW);
-    frame->setLoRaCR(loRaRadio->loRaCR);
-    frame->setSequenceNumber(0);
-    frame->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
-
-    frame->setLoRaUseHeader(tag->getUseHeader());
-
-    msg->insertAtFront(frame);
-
-    return msg;
-}
-
-Packet* MiRS::decapsulate(Packet *frame)
-{
-    EV << "decapsulate" << endl;
-    auto loraHeader = frame->popAtFront<LoRaMacFrame>();
-    frame->addTagIfAbsent<MacAddressInd>()->setSrcAddress(loraHeader->getTransmitterAddress());
-    frame->addTagIfAbsent<MacAddressInd>()->setDestAddress(loraHeader->getReceiverAddress());
-    frame->addTagIfAbsent<InterfaceInd>()->setInterfaceId(networkInterface->getInterfaceId());
-
-    return frame;
-}
-
-// ================================================================================================
-// ================================================================================================
-
-// ================================================================================================
-// Backoff Period
-// ================================================================================================
-
-void MiRS::invalidateBackoffPeriod()
-{
-    EV << "invalidateBackoffPeriod" << endl;
-    backoffPeriod = -1;
-}
-
-bool MiRS::isInvalidBackoffPeriod()
-{
-    EV << "isInvalidBackoffPeriod" << endl;
-    return backoffPeriod == -1;
-}
-
-void MiRS::generateBackoffPeriod()
-{
-    EV << "generateBackoffPeriod" << endl;
-    int slots = intrand(cwBackoff);
-    EV << "slots: " << slots << endl;
-    backoffPeriod = slots * backoffFS;
-}
-
-void MiRS::scheduleBackoffTimer()
-{
-    EV << "scheduleBackoffTimer" << endl;
-    if (isInvalidBackoffPeriod())
-        generateBackoffPeriod();
-    EV << "backoffPeriod: " << backoffPeriod << endl;
-    scheduleAfter(backoffPeriod, endBackoff);
-}
-
-void MiRS::decreaseBackoffPeriod()
-{
-    EV << "decreaseBackoffPeriod" << endl;
-    simtime_t elapsedBackoffTime = simTime() - endBackoff->getSendingTime();
-    backoffPeriod -= ((int) (elapsedBackoffTime / backoffFS)) * backoffFS;
-    ASSERT(backoffPeriod >= 0);
-}
-
-void MiRS::cancelBackoffTimer()
-{
-    EV << "cancelBackoffTimer" << endl;
-    cancelEvent(endBackoff);
-}
-
-// ================================================================================================
-// ================================================================================================
-
-// ================================================================================================
-// CTS CW Period
-// ================================================================================================
-
-void MiRS::invalidateCTSCWPeriod()
-{
-    EV << "invalidateCTSCWPeriod" << endl;
-    ctsCWPeriod = -1;
-}
-
-bool MiRS::isInvalidCTSCWPeriod()
-{
-    EV << "isInvalidCTSCWPeriod" << endl;
-    return ctsCWPeriod == -1;
-}
-
-void MiRS::generateCTSCWPeriod()
-{
-    EV << "generateCTSCWPeriod" << endl;
-    int slots = intrand(cwCTS);
-    EV << "slots: " << slots << endl;
-    ctsCWPeriod = slots * ctsFS;
-}
-
-void MiRS::scheduleCTSCWTimer()
-{
-    EV << "scheduleCTSCWTimer" << endl;
-    if (isInvalidCTSCWPeriod())
-        generateCTSCWPeriod();
-    EV << "ctsCWPeriod: " << ctsCWPeriod << endl;
-    scheduleAfter(ctsCWPeriod, ctsCWTimeout);
-}
-
-void MiRS::cancelCTSCWTimer()
-{
-    EV << "cancelCTSCWTimer" << endl;
-    cancelEvent(ctsCWTimeout);
-}
-
-// ================================================================================================
-// ================================================================================================
-
-// ================================================================================================
-// Radio Utils
-// ================================================================================================
-
-bool MiRS::isMediumFree()
-{
-    EV << "isMediumFree" << endl;
-    return radio->getReceptionState() == IRadio::RECEPTION_STATE_IDLE;
-}
-
-bool MiRS::isReceiving()
-{
-    EV << "isReceiving" << endl;
-    return radio->getReceptionState() == IRadio::RECEPTION_STATE_RECEIVING;
-}
-
-void MiRS::turnOnReceiver()
-{
-// this makes receiverPart go to idle no matter what
-    EV << "turnOnReceiver" << endl;
-    LoRaRadio *loraRadio;
-    loraRadio = check_and_cast<LoRaRadio*>(radio);
-    loraRadio->setRadioMode(IRadio::RADIO_MODE_RECEIVER);
-}
-void MiRS::turnOnTransmitter()
-{
-// this makes receiverPart go to idle no matter what
-    EV << "turnOnTransmitter" << endl;
-    LoRaRadio *loraRadio;
-    loraRadio = check_and_cast<LoRaRadio*>(radio);
-    loraRadio->setRadioMode(IRadio::RADIO_MODE_TRANSMITTER);
-}
-
-void MiRS::turnOffReceiver()
-{
-    EV << "turnOffReceiver" << endl;
-    LoRaRadio *loraRadio;
-    loraRadio = check_and_cast<LoRaRadio*>(radio);
-    loraRadio->setRadioMode(IRadio::RADIO_MODE_SLEEP);
-}
-
-// ================================================================================================
-// ================================================================================================
-
-// ================================================================================================
-// Helper functions
-// ================================================================================================
-
-void MiRS::finishCurrentTransmission()
-{
-    EV << "finishCurrentTransmission" << endl;
-    deleteCurrentTxFrame();
-}
-
-Packet* MiRS::getCurrentTransmission()
-{
-    EV << "getCurrentTransmission" << endl;
-    ASSERT(currentTxFrame != nullptr);
-    return currentTxFrame;
-}
-
-MacAddress MiRS::getAddress()
-{
-    return address;
-}
-
-// We do not have to wait for a ongoing transmission by a hidden node. Have to check before going into backoff period
-// AND we are not waiting for the start of a message
-bool MiRS::isFreeToSend()
-{
-    EV << "isFreeToSend" << endl;
-    return !endOngoingMsg->isScheduled() && !transmissionStartTimeout->isScheduled();
-}
-
-double MiRS::predictOngoingMsgTime(int packetBytes)
-{
-    EV << "predictOngoingMsgTime" << endl;
-    double sf = loRaRadio->loRaSF;
-    double bw = loRaRadio->loRaBW.get();
-    double cr = loRaRadio->loRaCR;
-    simtime_t Tsym = (pow(2, sf)) / (bw / 1000);
-
-    double preambleSymbNb = 8;
-    double headerSymbNb = 8;
-    double payloadSymbNb = std::ceil((8 * packetBytes - 4 * sf + 28 + 16 - 20 * 0) / (4 * (sf - 2 * 0))) * (cr + 4);
-    if (payloadSymbNb < 0)
-        payloadSymbNb = 0;
-
-    simtime_t Tpreamble = (preambleSymbNb + 4.25) * Tsym / 1000;
-    simtime_t Theader = headerSymbNb * Tsym / 1000;
-    ;
-    simtime_t Tpayload = payloadSymbNb * Tsym / 1000;
-
-    const simtime_t duration = Tpreamble + Theader + Tpayload;
-    return duration.dbl();
-    EV << "sendDataFrame" << endl;
-}
-
-// ================================================================================================
-// ================================================================================================
-
-}// namespace inet

@@ -2,7 +2,12 @@
 
 from typing import Callable, List, Tuple
 
-from aggregate_metrics import aggregate_collision_rate, aggregate_time_on_air
+from aggregate_metrics import (
+    aggregate_collision_per_node,
+    aggregate_mac_efficiency,
+    aggregate_normalized_data_throughput,
+    aggregate_time_on_air,
+)
 
 
 Aggregator = Tuple[str, Callable[[], None]]
@@ -18,6 +23,14 @@ def run_all(aggregators: List[Aggregator]) -> None:
 if __name__ == "__main__":
     AGGREGATORS: List[Aggregator] = [
         ("timeOnAir", aggregate_time_on_air.aggregate_time_on_air),
-        ("collisionRate", aggregate_collision_rate.aggregate_collision_rate),
+        (
+            "collisionPerNode",
+            aggregate_collision_per_node.aggregate_collision_per_node,
+        ),
+        ("macEfficiency", aggregate_mac_efficiency.aggregate_mac_efficiency),
+        (
+            "normalizedDataThroughput",
+            aggregate_normalized_data_throughput.aggregate_normalized_data_throughput,
+        ),
     ]
     run_all(AGGREGATORS)

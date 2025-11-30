@@ -27,7 +27,7 @@ public:
     virtual ~CustomPacketQueue();
 
     // Queue operations
-    bool enqueuePacket(Packet *pkt);
+    void enqueuePacket(Packet *pkt);
     void enqueueNodeAnnounce(Packet *pkt);
     void enqueuePacketAtPosition(Packet *pkt, int pos);
     Packet* dequeuePacket();

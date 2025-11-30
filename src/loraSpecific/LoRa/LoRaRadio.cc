@@ -441,14 +441,15 @@ void LoRaRadio::endReception(cMessage *timer)
 
         auto tranmissionPacket = transmission->getPacket();
         auto infoTag = tranmissionPacket->getTag<MessageInfoTag>();
-//        bool isCollided = isReceptionPossible && !isReceptionAttempted;
 
         if (isReceptionSuccessful) {
             if (infoTag->getHasUsefulData()) {
                 EV << "RECEPTION IS SUCCESSFULL WITH and we have useful data with: " << macFrame << endl;
                 DataLogger::getInstance()->logEffectiveBytesReceived(infoTag->getPayloadSize());
+                DataLogger::getInstance()->logEffectiveReceptions();
             }
             DataLogger::getInstance()->logBytesReceived(tranmissionPacket->getByteLength());
+            DataLogger::getInstance()->logReceptions();
         }
 
         int received = -1;
@@ -463,9 +464,9 @@ void LoRaRadio::endReception(cMessage *timer)
         // We define Bytes sent as all the possible nodes that are in range to receive the packet. So if a sends 10 bytes to b and c we have 20 bytes sent
         if (isReceptionPossible) {
             if (infoTag->getHasUsefulData()) {
-                DataLogger::getInstance()->logEffectiveBytesSent(infoTag->getPayloadSize());
+                DataLogger::getInstance()->logEffectiveBytesReceivedIncludingCollisions(infoTag->getPayloadSize());
             }
-            DataLogger::getInstance()->logBytesSent(tranmissionPacket->getByteLength());
+            DataLogger::getInstance()->logBytesReceivedIncludingCollisions(tranmissionPacket->getByteLength());
         }
 
         if (isReceptionSuccessful)

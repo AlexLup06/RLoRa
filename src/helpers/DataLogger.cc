@@ -33,14 +33,44 @@ void DataLogger::logEffectiveBytesReceived(int size)
 {
     effectiveBytesReceived += size;
 }
-void DataLogger::logEffectiveBytesSent(int size)
+void DataLogger::logEffectiveBytesReceivedIncludingCollisions(int size)
 {
-    effectiveBytesSent += size;
+    effectiveBytesReceivedIncludingCollisions += size;
 }
 void DataLogger::logBytesReceived(int size)
 {
     bytesReceived += size;
 }
+void DataLogger::logBytesReceivedIncludingCollisions(int size)
+{
+    bytesReceivedIncludingCollisions += size;
+}
+
+void DataLogger::logEffectiveTransmission()
+{
+    effectiveTransmissions++;
+}
+
+void DataLogger::logEffectiveBytesSent(int size)
+{
+    effectiveBytesSent += size;
+}
+
+void DataLogger::logTransmission()
+{
+    transmissions++;
+}
+
+void DataLogger::logReceptions()
+{
+    receptions++;
+}
+    
+void DataLogger::logEffectiveReceptions()
+{
+    effectiveReceptions++;
+}
+
 void DataLogger::logBytesSent(int size)
 {
     bytesSent += size;
@@ -66,8 +96,11 @@ void DataLogger::writeDataToFile(const string &filename)
     }
 
     out << "Collisions\n" << collisionSet.size() << "\n" << possibleCollisionSet.size() << endl;
-    out << "Effective Bytes\n" << effectiveBytesReceived << "\n" << effectiveBytesSent << endl;
-    out << "Bytes\n" << bytesReceived << "\n" << bytesSent << endl;
+    out << "Transmissions\n" << effectiveTransmissions << "\n" << transmissions << endl;
+    out << "Receptions\n" << effectiveReceptions << "\n" << receptions << endl;
+    out << "Bytes Received\n" << effectiveBytesReceived << "\n" << bytesReceived << endl;
+    out << "Bytes Received including Collisions\n" << effectiveBytesReceivedIncludingCollisions << "\n" << bytesReceivedIncludingCollisions << endl;
+    out << "Bytes Sent\n" << effectiveBytesSent << "\n" << bytesSent << endl;
 
     out.close();
 }

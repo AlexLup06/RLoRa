@@ -38,8 +38,21 @@ def compute_stats(values: Iterable[float]) -> Dict[str, float]:
     }
 
 
+def _read_first_value(lines: List[str], label: str) -> float:
+    try:
+        idx = lines.index(label)
+    except ValueError as exc:
+        raise ValueError(f"Label '{label}' missing") from exc
+    if idx + 1 >= len(lines):
+        raise ValueError(f"No value after label '{label}'")
+    try:
+        return float(lines[idx + 1])
+    except ValueError as exc:
+        raise ValueError(f"Value after '{label}' is not numeric") from exc
+
+
 def parse_file(path: str) -> Tuple[Dict[str, str], float]:
-    """Parse collisions file and return metadata + collision ratio."""
+    """Parse txt file and return metadata + mac efficiency."""
     filename = os.path.basename(path)
     match = TXT_PATTERN.match(filename)
     if not match:
@@ -52,29 +65,24 @@ def parse_file(path: str) -> Tuple[Dict[str, str], float]:
 
     with open(path, "r") as handle:
         lines = [line.strip() for line in handle.readlines() if line.strip()]
-    if len(lines) < 3:
-        raise ValueError("File does not contain collision data")
-    try:
-        collisions = float(lines[1])
-        possible = float(lines[2])
-    except ValueError as exc:
-        raise ValueError("Collision values are not numeric") from exc
+    data_bytes = _read_first_value(lines, "Effective Bytes")
+    total_bytes = _read_first_value(lines, "Bytes")
 
-    if possible == 0:
-        raise ValueError("Possible collisions is zero")
+    if total_bytes == 0:
+        raise ValueError("Total bytes is zero")
 
-    rate = collisions / possible
+    efficiency = data_bytes / total_bytes
     metadata = {
         "macProtocol": protocol,
         "dimensions": max_x,
         "timeToNextMission": round_half_up(60.0 / ttnm) if ttnm else 0,
         "numberNodes": int(nodes),
     }
-    return metadata, rate
+    return metadata, efficiency
 
 
-def aggregate_collision_rate() -> None:
-    """Aggregate collision rate from txt files grouped by metadata (excluding mobility)."""
+def aggregate_mac_efficiency() -> None:
+    """Aggregate MAC efficiency from txt files grouped by metadata (excluding mobility)."""
     groups: Dict[Tuple[str, Tuple[Tuple[str, str], ...]], List[float]] = defaultdict(
         list
     )
@@ -90,13 +98,13 @@ def aggregate_collision_rate() -> None:
 
             path = os.path.join(root, filename)
             try:
-                meta, rate = parse_file(path)
+                meta, efficiency = parse_file(path)
             except Exception as exc:
                 print(f"Skipping {path}: {exc}")
                 continue
 
             key = (meta["macProtocol"], tuple(sorted(meta.items())))
-            groups[key].append(rate)
+            groups[key].append(efficiency)
             meta_lookup[key] = meta
 
     for key, values in groups.items():
@@ -109,7 +117,7 @@ def aggregate_collision_rate() -> None:
         entry = {"metadata": metadata, "data": stats}
         protocol_dim_entries[protocol][dim].append(entry)
 
-    output_dir = os.path.join(OUTPUT_DIR, "collision-rate")
+    output_dir = os.path.join(OUTPUT_DIR, "mac-efficiency")
     os.makedirs(output_dir, exist_ok=True)
 
     for protocol, dim_map in protocol_dim_entries.items():
@@ -135,7 +143,7 @@ def aggregate_collision_rate() -> None:
                 ],
             }
             outfile = os.path.join(
-                output_dir, f"{protocol_lower}_{dim_safe}_collision-rate.json"
+                output_dir, f"{protocol_lower}_{dim_safe}_mac-efficiency.json"
             )
             with open(outfile, "w") as handle:
                 json.dump(payload, handle, indent=2)
@@ -143,4 +151,4 @@ def aggregate_collision_rate() -> None:
 
 
 if __name__ == "__main__":
-    aggregate_collision_rate()
+    aggregate_mac_efficiency()

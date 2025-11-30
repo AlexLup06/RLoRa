@@ -122,27 +122,6 @@ def modify_received_id(exp):
     }
 
 
-# "vectors": [
-#   {"value": [17, 34, 53, ...]}
-# ]
-def modify_throughput(exp):
-    """Sum all throughput values across nodes."""
-    vecs = exp.get("vectors", [])
-    if not vecs:
-        return
-    n = len(vecs[0]["value"])
-    total = [sum(v["value"][i] for v in vecs) for i in range(n)]
-    exp["vectors"] = [{"value": total}]
-
-
-# "vectors": [
-#   {"value": [17, 34, 53, ...]}
-# ]
-def modify_effective_throughput(exp):
-    """Same as throughput but for effective values."""
-    modify_throughput(exp)
-
-
 # {
 #   "vectors": {
 #     "missionId": [5696, 5697, 5698],
@@ -260,14 +239,11 @@ def modify_time_of_last_trajectory(exp):
     exp["vectors"] = cleaned
 
 
-
 # ----------------------------------------------------------
 # Dispatcher map (regex → handler)
 # ----------------------------------------------------------
 pattern_map = {
     r"^timeOnAir-(MassMobility|GaussMarkovMobility)-\d+\.json$": modify_time_on_air,
-    r"^throughput-(MassMobility|GaussMarkovMobility)-\d+\.json$": modify_throughput,  # done
-    r"^effectiveThroughput-(MassMobility|GaussMarkovMobility)-\d+\.json$": modify_effective_throughput,  # done
     r"^idReceived-(MassMobility|GaussMarkovMobility)-\d+\.json$": modify_received_id,
     r"^missionId-(MassMobility|GaussMarkovMobility)-\d+\.json$": modify_mission_id,
     r"^timeOfLastTrajectory-(MassMobility|GaussMarkovMobility)-\d+\.json$": modify_time_of_last_trajectory,
