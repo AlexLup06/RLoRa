@@ -16,22 +16,13 @@ namespace rlora
         waitDelay = nullptr;
     }
 
-    void MeshRouter::handleLowerPacket(Packet *msg)
-    {
-        if (fsm.getState() == RECEIVING)
-        {
-            handleWithFsm(msg);
-        }
-        else
-        {
-            EV << "Received MSG while not in RECEIVING state" << endl;
-            delete msg;
-        }
-    }
-
     void MeshRouter::handleWithFsm(cMessage *msg)
     {
-        auto pkt = dynamic_cast<Packet *>(msg);
+        Packet *packet = dynamic_cast<Packet *>(msg);
+        if (packet != nullptr)
+        {
+            decapsulate(packet);
+        }
 
         FSMA_Switch(fsm)
         {
@@ -74,27 +65,31 @@ namespace rlora
                 FSMA_Event_Transition(Listening - Receiving,
                                       isLowerMessage(msg),
                                       LISTENING,
-                                      handlePacket(pkt););
+                                      handlePacket(packet););
             }
         }
 
-        if (fsm.getState() == LISTENING && receptionState == IRadio::RECEPTION_STATE_IDLE && !waitDelay->isScheduled())
+        if (fsm.getState() == LISTENING && !waitDelay->isScheduled())
         {
             if (currentTxFrame != nullptr)
             {
-                handleWithFsm(currentTxFrame);
+                handleWithFsm(moreMessagesToSend);
             }
             else if (!packetQueue.isEmpty())
             {
                 currentTxFrame = packetQueue.dequeuePacket();
-                handleWithFsm(currentTxFrame);
+                handleWithFsm(moreMessagesToSend);
             }
+        }
+
+        if (packet != nullptr)
+        {
+            delete packet;
         }
     }
 
     void MeshRouter::handlePacket(Packet *packet)
     {
-        decapsulate(packet);
         auto chunk = packet->peekAtFront<inet::Chunk>();
 
         if (auto msg = dynamic_cast<const BroadcastRts *>(chunk.get()))
@@ -106,13 +101,11 @@ namespace rlora
 
             if (!isMissionMsg && !incompleteNeighbourPktList.isNewIdHigher(source, messageId))
             {
-                delete packet;
                 return;
             }
 
             if (isMissionMsg && !incompleteMissionPktList.isNewIdHigher(source, missionId))
             {
-                delete packet;
                 return;
             }
 
@@ -146,7 +139,6 @@ namespace rlora
 
             retransmitPacket(result);
         }
-        delete packet;
     }
 
     void MeshRouter::scheduleWaitTimer()

@@ -32,15 +32,16 @@ namespace rlora
         int bytesReceived = 0;
         int bytesReceivedIncludingCollisions = 0;
 
-        DataLogger()
-        {
-        }
+        DataLogger() {}
+        virtual ~DataLogger();
 
     public:
         DataLogger(const DataLogger &) = delete;
         DataLogger &operator=(const DataLogger &) = delete;
 
         static DataLogger *getInstance();
+
+        void clear();
 
         void logCollision(int id1, int id2);                         // ✅
         void logPossibleCollision(int id1, int id2);                 // ✅

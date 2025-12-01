@@ -13,10 +13,12 @@ namespace rlora
     public:
     protected:
         simtime_t sifs = 0.002;
-        simtime_t backoffFS = 0.021; // timeOnAir of Header + 0.001 puffer
-        simtime_t ctsFS = 0.018;     // timeOnAir of Header + 0.0005 puffer
+        
+        int cwBackoff = 16;
+        simtime_t backoffFS = 0.019 + 0.003;
+        
+        simtime_t ctsFS = 0.016 + 0.003;
         int cwCTS = 16;
-        int cwBackoff = 8;
 
         int sizeOfFragment_CTSData = -1;
         int sourceOfRTS_CTSData = -1;
@@ -39,17 +41,22 @@ namespace rlora
         virtual void initializeRtsCtsProtocol() {};
         void finishProtocol() override;
 
+        void handleCTS(const BroadcastCTS *cts);
+        void handleFragment(const BroadcastFragment *fragment, Ptr<const MessageInfoTag> infoTag);
+
         void handleCTSTimeout(bool withRetry);
-        void handleCTS(Packet *pkt);
         void sendCTS(bool withRemainder);
         void sendRTS();
-        bool isCTSForSameRTSSource(cMessage *msg);
-        bool isPacketFromRTSSource(cMessage *msg);
-        bool isOurCTS(cMessage *msg);
+        bool isCTSForSameRTSSource(Packet *msg);
+        bool isPacketFromRTSSource(Packet *msg);
+        bool isOurCTS(Packet *msg);
         bool isFreeToSend();
         bool withRTS();
         void clearRTSsource();
         void setRTSsource(int rtsSourceId);
+
+        bool isStrayCTS(Packet *msg);
+        void handleStrayCTS(Packet *msg, bool withRemainder);
 
     private:
     };

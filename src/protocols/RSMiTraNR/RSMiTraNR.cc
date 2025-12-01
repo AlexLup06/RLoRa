@@ -11,12 +11,11 @@ namespace rlora
 
     void RSMiTraNR::handleWithFsm(cMessage *msg)
     {
-        auto pkt = dynamic_cast<Packet *>(msg);
-
-        EV << "Handlewigthfsms" << endl;
-        EV << "Handlewigthfsms: " << msg << endl;
-        EV << "CurrentTxFrame: " << currentTxFrame << endl;
-        EV << "We are in: " << fsm.getStateName() << endl;
+        Packet *packet = dynamic_cast<Packet *>(msg);
+        if (packet != nullptr)
+        {
+            decapsulate(packet);
+        }
 
         FSMA_Switch(fsm)
         {
@@ -79,18 +78,29 @@ namespace rlora
             FSMA_State(WAIT_CTS)
             {
                 FSMA_Enter(turnOnReceiver());
+                FSMA_Event_Transition(got some other CTS - wait f0r the maximum CTS CW time,
+                                      isStrayCTS(packet),
+                                      SWITCHING,
+                                      cancelEvent(CTSWaitTimeout);
+                                      handleStrayCTS(packet, true);
+                                      handleCTSTimeout(false););
                 FSMA_Event_Transition(we - didnt - get - cts - go - back - to - listening,
                                       msg == CTSWaitTimeout,
                                       SWITCHING,
                                       handleCTSTimeout(false);
                                       scheduleAfter(sifs, shortWait));
                 FSMA_Event_Transition(Listening - Receiving,
-                                      isOurCTS(msg),
-                                      READY_TO_SEND,
-                                      delete pkt;);
+                                      isOurCTS(packet),
+                                      READY_TO_SEND, );
             }
             FSMA_State(READY_TO_SEND)
             {
+                FSMA_Event_Transition(got some other CTS - wait f0r the maximum CTS CW time,
+                                      isStrayCTS(packet),
+                                      SWITCHING,
+                                      cancelEvent(CTSWaitTimeout);
+                                      handleStrayCTS(packet, true);
+                                      handleCTSTimeout(true););
                 FSMA_Event_Transition(we - didnt - get - cts - go - back - to - listening,
                                       msg == CTSWaitTimeout,
                                       TRANSMITING, );
@@ -109,17 +119,23 @@ namespace rlora
             }
             FSMA_State(CW_CTS)
             {
-                FSMA_Enter(ctsBackoff->scheduleBackoffTimer(););
+                FSMA_Enter(ctsBackoff->scheduleBackoffTimer());
+                FSMA_Event_Transition(got some other CTS - wait f0r the maximum CTS CW time,
+                                      isStrayCTS(packet),
+                                      SWITCHING,
+                                      ctsBackoff->invalidateBackoffPeriod();
+                                      ctsBackoff->cancelBackoffTimer();
+                                      handleStrayCTS(packet, true));
                 FSMA_Event_Transition(had - to - wait - cw - to - send - cts,
                                       msg == ctsCWTimeout && !isReceiving(),
                                       SEND_CTS,
                                       ctsBackoff->invalidateBackoffPeriod());
                 FSMA_Event_Transition(got - packet - from - rts - source,
-                                      isPacketFromRTSSource(msg),
+                                      isPacketFromRTSSource(packet),
                                       SWITCHING,
                                       ctsBackoff->invalidateBackoffPeriod();
                                       ctsBackoff->cancelBackoffTimer();
-                                      handlePacket(pkt);
+                                      handlePacket(packet);
                                       scheduleAfter(sifs, shortWait););
             }
             FSMA_State(SEND_CTS)
@@ -136,6 +152,10 @@ namespace rlora
             FSMA_State(AWAIT_TRANSMISSION)
             {
                 FSMA_Enter(turnOnReceiver());
+                FSMA_Event_Transition(got some other CTS - wait f0r the maximum CTS CW time,
+                                      isStrayCTS(packet),
+                                      AWAIT_TRANSMISSION,
+                                      handleStrayCTS(packet, true));
                 FSMA_Event_Transition(source - didnt - get - cts - just - go - back - to - regular - listening,
                                       msg == transmissionStartTimeout && !isReceiving(),
                                       SWITCHING,
@@ -143,9 +163,9 @@ namespace rlora
                                       cancelEvent(transmissionEndTimeout);
                                       scheduleAfter(sifs, shortWait););
                 FSMA_Event_Transition(received - packet - check - whether - from - rts - source - then - handle,
-                                      isPacketFromRTSSource(msg),
+                                      isPacketFromRTSSource(packet),
                                       SWITCHING,
-                                      handlePacket(pkt);
+                                      handlePacket(packet);
                                       cancelEvent(transmissionStartTimeout);
                                       cancelEvent(transmissionEndTimeout);
                                       scheduleAfter(sifs, shortWait););
@@ -159,7 +179,7 @@ namespace rlora
                 FSMA_Event_Transition(received - message - handle - keep - listening,
                                       isLowerMessage(msg),
                                       SWITCHING,
-                                      handlePacket(pkt);
+                                      handlePacket(packet);
                                       scheduleAfter(sifs, shortWait));
             }
         }
@@ -172,17 +192,21 @@ namespace rlora
             }
             else if (!packetQueue.isEmpty() && currentTxFrame == nullptr)
             {
-                EV << "Dequeuing and deleting current tx" << endl;
                 currentTxFrame = packetQueue.dequeuePacket();
                 handleWithFsm(moreMessagesToSend);
             }
+        }
+
+        if (packet != nullptr)
+        {
+            delete packet;
         }
     }
 
     void RSMiTraNR::handlePacket(Packet *packet)
     {
-        decapsulate(packet);
         auto chunk = packet->peekAtFront<inet::Chunk>();
+        Ptr<const MessageInfoTag> infoTag = packet->getTag<MessageInfoTag>();
 
         if (auto msg = dynamic_cast<const BroadcastRts *>(chunk.get()))
         {
@@ -193,13 +217,11 @@ namespace rlora
 
             if (!isMissionMsg && !incompleteNeighbourPktList.isNewIdHigher(source, messageId))
             {
-                delete packet;
                 return;
             }
 
             if (isMissionMsg && !incompleteMissionPktList.isNewIdHigher(source, missionId))
             {
-                delete packet;
                 return;
             }
 
@@ -236,38 +258,9 @@ namespace rlora
             }
         }
         else if (auto msg = dynamic_cast<const BroadcastFragment *>(chunk.get()))
-        {
-            int missionId = msg->getMissionId();
-            auto typeTag = packet->getTag<MessageInfoTag>();
-            bool isMissionMsg = !typeTag->isNeighbourMsg();
-
-            Result result = addToIncompletePacket(msg, isMissionMsg);
-            retransmitPacket(result);
-        }
+            handleFragment(msg, infoTag);
         else if (auto msg = dynamic_cast<const BroadcastCTS *>(chunk.get()))
-        {
-            ASSERT(msg->getHopId() != nodeId);
-            int size = msg->getSizeOfFragment();
-            if (endOngoingMsg->isScheduled())
-            {
-                cancelEvent(endOngoingMsg);
-            }
-            ASSERT(size > 0);
-            scheduleAfter(predictOngoingMsgTime(size) + sifs, endOngoingMsg);
-        }
-        delete packet;
-    }
-
-    void RSMiTraNR::handleLowerPacket(Packet *msg)
-    {
-        if (fsm.getState() == RECEIVING || fsm.getState() == WAIT_CTS || fsm.getState() == CW_CTS || fsm.getState() == AWAIT_TRANSMISSION)
-        {
-            handleWithFsm(msg);
-        }
-        else
-        {
-            delete msg;
-        }
+            handleCTS(msg);
     }
 
     void RSMiTraNR::createPacket(int payloadSize, int missionId, int source, bool isMission)

@@ -9,22 +9,13 @@ namespace rlora
         fsm.setState(LISTENING);
     }
 
-    void Aloha::handleLowerPacket(Packet *msg)
-    {
-        if (fsm.getState() == RECEIVING)
-        {
-            handleWithFsm(msg);
-        }
-        else
-        {
-            EV << "Received MSG while not in RECEIVING state" << endl;
-            delete msg;
-        }
-    }
-
     void Aloha::handleWithFsm(cMessage *msg)
     {
-        auto pkt = dynamic_cast<Packet *>(msg);
+        Packet *packet = dynamic_cast<Packet *>(msg);
+        if (packet != nullptr)
+        {
+            decapsulate(packet);
+        }
 
         FSMA_Switch(fsm)
         {
@@ -63,7 +54,7 @@ namespace rlora
                 FSMA_Event_Transition(Listening - Receiving,
                                       isLowerMessage(msg),
                                       LISTENING,
-                                      handlePacket(pkt););
+                                      handlePacket(packet););
             }
         }
 
@@ -72,11 +63,15 @@ namespace rlora
             currentTxFrame = packetQueue.dequeuePacket();
             handleWithFsm(moreMessagesToSend);
         }
+
+        if (packet != nullptr)
+        {
+            delete packet;
+        }
     }
 
     void Aloha::handlePacket(Packet *packet)
     {
-        decapsulate(packet);
         auto chunk = packet->peekAtFront<inet::Chunk>();
 
         if (auto msg = dynamic_cast<const BroadcastLeaderFragment *>(chunk.get()))
@@ -84,7 +79,6 @@ namespace rlora
         else if (auto msg = dynamic_cast<const BroadcastFragment *>(chunk.get()))
             handleFragment(msg);
 
-        delete packet;
     }
 
     void Aloha::handleLeaderFragment(const BroadcastLeaderFragment *msg)

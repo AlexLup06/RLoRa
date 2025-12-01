@@ -18,14 +18,13 @@ namespace rlora
         delete backoffHandler;
     }
 
-    void Csma::handleLowerPacket(Packet *packet)
-    {
-        handleWithFsm(packet);
-    }
-
     void Csma::handleWithFsm(cMessage *msg)
     {
-        Packet *pkt = dynamic_cast<Packet *>(msg);
+        Packet *packet = dynamic_cast<Packet *>(msg);
+        if (packet != nullptr)
+        {
+            decapsulate(packet);
+        }
 
         FSMA_Switch(fsm)
         {
@@ -75,36 +74,37 @@ namespace rlora
                 FSMA_Event_Transition(Receive - Broadcast,
                                       isLowerMessage(msg),
                                       LISTENING,
-                                      handlePacket(pkt););
+                                      handlePacket(packet););
             }
         }
 
         if (fsm.getState() == LISTENING)
         {
-            if (isReceiving())
-                handleWithFsm(mediumStateChange);
-            else if (currentTxFrame != nullptr && isMediumFree())
+            if (currentTxFrame != nullptr)
             {
-                handleWithFsm(currentTxFrame);
+                handleWithFsm(moreMessagesToSend);
             }
-            else if (!packetQueue.isEmpty() && isMediumFree())
+            else if (!packetQueue.isEmpty() && currentTxFrame == nullptr)
             {
                 currentTxFrame = packetQueue.dequeuePacket();
-                handleWithFsm(currentTxFrame);
+                handleWithFsm(moreMessagesToSend);
             }
+        }
+
+        if (packet != nullptr)
+        {
+            delete packet;
         }
     }
 
     void Csma::handlePacket(Packet *packet)
     {
-        decapsulate(packet);
         auto chunk = packet->peekAtFront<inet::Chunk>();
 
         if (auto msg = dynamic_cast<const BroadcastLeaderFragment *>(chunk.get()))
             handleLeaderFragment(msg);
         else if (auto msg = dynamic_cast<const BroadcastFragment *>(chunk.get()))
             handleFragment(msg);
-        delete packet;
     }
 
     void Csma::handleLeaderFragment(const BroadcastLeaderFragment *msg)

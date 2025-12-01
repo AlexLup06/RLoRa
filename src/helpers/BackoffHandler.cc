@@ -1,5 +1,5 @@
 #include "BackoffHandler.h"
-
+using omnetpp::uniform;
 namespace rlora
 {
 
@@ -15,10 +15,11 @@ namespace rlora
 
     void BackoffHandler::generateBackoffPeriod()
     {
-        int slots = owner->intrand(cw);
-        backoffPeriod = slots * slotTime;
+        int slot = owner->intrand(cw);
+        chosenSlot = slot;
+        backoffPeriod = slot * slotTime + owner->uniform(0, 0.003); // random jitter
         ASSERT(backoffPeriod >= 0);
-        remainder = cw - slots - 1;
+        remainder = cw - slot - 1;
     }
 
     void BackoffHandler::decreaseBackoffPeriod()

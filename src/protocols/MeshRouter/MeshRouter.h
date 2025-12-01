@@ -28,7 +28,6 @@ namespace rlora
         void initializeProtocol() override;
         void finishProtocol() override;
 
-        void handleLowerPacket(Packet *packet) override;
         void handleWithFsm(cMessage *msg) override;
         void handlePacket(Packet *packet) override;
 

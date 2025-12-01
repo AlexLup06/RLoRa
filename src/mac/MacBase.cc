@@ -11,6 +11,7 @@ namespace rlora
             initializeMacContext();
 
             moreMessagesToSend = new cMessage("moreMessagesToSend");
+
             missionIdFragmentSent = registerSignal("missionIdFragmentSent");
             missionIdRtsSent = registerSignal("missionIdRtsSent");
             receivedMissionId = registerSignal("receivedMissionId");
@@ -127,10 +128,20 @@ namespace rlora
             {
                 emit(missionIdFragmentSent, infoTag->getMissionId());
             }
+        }
+
+        if (infoTag->getHasUsefulData())
+        {
             DataLogger::getInstance()->logEffectiveTransmission();
             DataLogger::getInstance()->logEffectiveBytesSent(infoTag->getPayloadSize());
         }
+
         DataLogger::getInstance()->logTransmission();
         DataLogger::getInstance()->logBytesSent(frameToSend->getByteLength());
+    }
+
+    void MacBase::handleLowerPacket(Packet *msg)
+    {
+        handleWithFsm(msg);
     }
 }

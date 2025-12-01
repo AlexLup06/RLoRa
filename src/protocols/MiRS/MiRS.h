@@ -26,10 +26,9 @@ namespace rlora
         };
         cFSM fsm;
 
-        virtual void initializeRtsCtsProtocol() override;
+        void initializeRtsCtsProtocol() override;
 
-        virtual void handleLowerPacket(Packet *packet) override;
-        virtual void handleWithFsm(cMessage *msg) override;
+        void handleWithFsm(cMessage *msg) override;
         void handlePacket(Packet *packet) override;
 
         void createPacket(int payloadSize, int missionId, int source, bool isMission) override;

@@ -5,4 +5,5 @@ namespace rlora;
 class BroadcastCTS extends inet::FieldsChunk {
     int sizeOfFragment;
     int hopId;
+    int slot;
 }

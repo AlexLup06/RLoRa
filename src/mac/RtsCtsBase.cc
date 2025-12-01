@@ -48,12 +48,6 @@ namespace rlora
         return !endOngoingMsg->isScheduled() && !transmissionStartTimeout->isScheduled();
     }
 
-    void RtsCtsBase::handleCTS(Packet *pkt)
-    {
-        cancelEvent(CTSWaitTimeout);
-        delete pkt;
-    }
-
     void RtsCtsBase::handleCTSTimeout(bool withRetry)
     {
         if (!withRetry)
@@ -107,13 +101,11 @@ namespace rlora
         return infoTag->getWithRTS();
     }
 
-    bool RtsCtsBase::isOurCTS(cMessage *msg)
+    bool RtsCtsBase::isOurCTS(Packet *packet)
     {
-        auto pkt = dynamic_cast<Packet *>(msg);
-        if (pkt != nullptr)
+        if (packet != nullptr)
         {
-            decapsulate(pkt);
-            auto chunk = pkt->peekAtFront<inet::Chunk>();
+            auto chunk = packet->peekAtFront<inet::Chunk>();
             if (auto msg = dynamic_cast<const BroadcastCTS *>(chunk.get()))
             {
                 if (msg->getHopId() == nodeId)
@@ -122,20 +114,14 @@ namespace rlora
                 }
             }
         }
-        if (!msg->isSelfMessage())
-        {
-            delete msg;
-        }
         return false;
     }
 
-    bool RtsCtsBase::isCTSForSameRTSSource(cMessage *msg)
+    bool RtsCtsBase::isCTSForSameRTSSource(Packet *packet)
     {
-        auto pkt = dynamic_cast<Packet *>(msg);
-        if (pkt != nullptr)
+        if (packet != nullptr)
         {
-            decapsulate(pkt);
-            auto chunk = pkt->peekAtFront<inet::Chunk>();
+            auto chunk = packet->peekAtFront<inet::Chunk>();
             if (auto msg = dynamic_cast<const BroadcastCTS *>(chunk.get()))
             {
                 if (msg->getHopId() == rtsSource)
@@ -153,7 +139,11 @@ namespace rlora
         auto typeTag = header->getTag<MessageInfoTag>();
         ASSERT(typeTag->isHeader());
 
-        scheduleAfter(ctsFS * cwCTS + sifs + predictOngoingMsgTime(header->getByteLength()), CTSWaitTimeout);
+        scheduleAfter(
+            ctsFS * (cwCTS - 1) + sifs + 0.003 +
+                predictOngoingMsgTime(header->getByteLength()) +
+                predictOngoingMsgTime(BROADCAST_CTS),
+            CTSWaitTimeout);
         sendDown(header->dup());
         DataLogger::getInstance()->logTransmission();
         DataLogger::getInstance()->logBytesSent(header->getByteLength());
@@ -172,6 +162,7 @@ namespace rlora
         ctsPayload->setChunkLength(B(BROADCAST_CTS));
         ctsPayload->setSizeOfFragment(sizeOfFragment_CTSData);
         ctsPayload->setHopId(sourceOfRTS_CTSData);
+        ctsPayload->setSlot(ctsBackoff->chosenSlot);
 
         ctsPacket->insertAtBack(ctsPayload);
         ctsPacket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::apskPhy);
@@ -183,7 +174,6 @@ namespace rlora
         DataLogger::getInstance()->logBytesSent(ctsPacket->getByteLength());
         delete ctsPacket;
 
-        // After we send CTS, we need to receive message within ctsFS + sifs otherwise we assume there will be no message
         if (withRemainder)
         {
             scheduleAfter(ctsFS + sifs + ctsBackoff->remainder * ctsFS, transmissionStartTimeout);
@@ -199,6 +189,42 @@ namespace rlora
         sourceOfRTS_CTSData = -1;
     }
 
+    bool RtsCtsBase::isStrayCTS(Packet *packet)
+    {
+        if (packet != nullptr)
+        {
+            auto chunk = packet->peekAtFront<inet::Chunk>();
+            if (auto cts = dynamic_cast<const BroadcastCTS *>(chunk.get()))
+            {
+                if (cts->getHopId() != nodeId)
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    void RtsCtsBase::handleStrayCTS(Packet *packet, bool withRemainder)
+    {
+        auto chunk = packet->peekAtFront<inet::Chunk>();
+        auto cts = dynamic_cast<const BroadcastCTS *>(chunk.get());
+
+        if (endOngoingMsg->isScheduled())
+        {
+            cancelEvent(endOngoingMsg);
+        }
+        int remainingCtsCwDuration = (cwCTS - cts->getSlot() - 1) * (int)ctsFS.dbl();
+        if (withRemainder)
+        {
+            scheduleAfter(predictOngoingMsgTime(cts->getSizeOfFragment()) + remainingCtsCwDuration + sifs, endOngoingMsg);
+        }
+        else
+        {
+            scheduleAfter(predictOngoingMsgTime(cts->getSizeOfFragment()) + sifs, endOngoingMsg);
+        }
+    }
+
     void RtsCtsBase::clearRTSsource()
     {
         rtsSource = -1;
@@ -209,15 +235,13 @@ namespace rlora
         rtsSource = rtsSourceId;
     }
 
-    bool RtsCtsBase::isPacketFromRTSSource(cMessage *msg)
+    bool RtsCtsBase::isPacketFromRTSSource(Packet *packet)
     {
-        if (!isLowerMessage(msg))
+        if (packet == nullptr)
         {
             return false;
         }
 
-        auto packet = dynamic_cast<Packet *>(msg->dup());
-        decapsulate(packet);
         auto chunk = packet->peekAtFront<inet::Chunk>();
 
         if (auto fragment = dynamic_cast<const BroadcastFragment *>(chunk.get()))
@@ -226,12 +250,29 @@ namespace rlora
             if (infoTag->getHopId() == rtsSource)
             {
                 clearRTSsource();
-                delete packet;
                 return true;
             }
         }
-        delete packet;
-        delete msg;
         return false;
+    }
+    void RtsCtsBase::handleCTS(const BroadcastCTS *cts)
+    {
+        ASSERT(cts->getHopId() != nodeId);
+        int size = cts->getSizeOfFragment();
+        if (endOngoingMsg->isScheduled())
+        {
+            cancelEvent(endOngoingMsg);
+        }
+        ASSERT(size > 0);
+        scheduleAfter(predictOngoingMsgTime(size) + sifs, endOngoingMsg);
+    }
+
+    void RtsCtsBase::handleFragment(const BroadcastFragment *fragment, Ptr<const MessageInfoTag> infoTag)
+    {
+        int missionId = fragment->getMissionId();
+        bool isMissionMsg = !infoTag->isNeighbourMsg();
+
+        Result result = addToIncompletePacket(fragment, isMissionMsg);
+        retransmitPacket(result);
     }
 }

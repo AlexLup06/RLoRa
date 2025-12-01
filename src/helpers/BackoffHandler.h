@@ -2,6 +2,7 @@
 #define BACKOFF_HANDLER_H_
 
 #include "../common/common.h"
+#include <omnetpp.h>
 
 using namespace inet;
 
@@ -27,6 +28,8 @@ namespace rlora
         void cancelBackoffTimer();
 
         cSimpleModule *owner;
+
+        int chosenSlot = 0;
 
         simtime_t backoffPeriod;
         cMessage *endBackoff;

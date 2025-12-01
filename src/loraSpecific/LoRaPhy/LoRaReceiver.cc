@@ -151,7 +151,7 @@ bool LoRaReceiver::isPacketCollided(const IReception *reception, IRadioSignal::S
         int interferenceSF = loRaInterference->getLoRaSF();
 
         /* If difference in power between two signals is greater than threshold, no collision*/
-        int acceptableDif = 1000;
+        int acceptableDif = 12;
         if (std::abs(signalRSSI_dBm - interferenceRSSI_dBm) >= acceptableDif) {
             captureEffect = true;
         }

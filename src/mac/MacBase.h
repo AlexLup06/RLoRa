@@ -28,6 +28,7 @@ namespace rlora
         void handleSelfMessage(cMessage *msg) override;
         virtual void handleUpperPacket(Packet *packet) override;
         virtual void handlePacket(Packet *packet) = 0;
+        void handleLowerPacket(Packet *msg) override;
 
         virtual void sendDataFrame();
 

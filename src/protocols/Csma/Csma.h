@@ -30,7 +30,6 @@ namespace rlora
         void finishProtocol() override;
 
         void handlePacket(Packet *packet) override;
-        void handleLowerPacket(Packet *packet) override;
         void handleWithFsm(cMessage *msg) override;
 
         void createPacket(int payloadSize, int missionId, int source, bool isMission) override;
