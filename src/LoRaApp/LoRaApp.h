@@ -2,15 +2,7 @@
 #define LORAAPP_LORAAPP_H_
 
 #include <omnetpp.h>
-#include "inet/common/lifecycle/ILifecycle.h"
-#include "inet/common/lifecycle/NodeStatus.h"
-#include "inet/common/ModuleAccess.h"
-#include "inet/common/lifecycle/LifecycleOperation.h"
-
-#include "../loraSpecific/LoRa/LoRaRadio.h"
-#include "../loraSpecific/LoRa/LoRaTagInfo_m.h"
-
-#include "LoRaRobotPacket_m.h"
+#include "../common/common.h"
 
 using namespace omnetpp;
 using namespace inet;

@@ -101,10 +101,10 @@ namespace rlora
         }
 
         int currentPayloadSize = 0;
-        if (payloadSize + BROADCAST_LEADER_FRAGMENT_META_SIZE > 255)
+        if (payloadSize + BROADCAST_LEADER_FRAGMENT_META_SIZE > MAXIMUM_PACKET_SIZE)
         {
-            currentPayloadSize = 255 - BROADCAST_LEADER_FRAGMENT_META_SIZE;
-            headerPayload->setChunkLength(B(255));
+            currentPayloadSize = MAXIMUM_PACKET_SIZE - BROADCAST_LEADER_FRAGMENT_META_SIZE;
+            headerPayload->setChunkLength(B(MAXIMUM_PACKET_SIZE));
             headerPayload->setPayloadSize(currentPayloadSize);
             payloadSize = payloadSize - currentPayloadSize;
         }
@@ -141,10 +141,10 @@ namespace rlora
             auto fragmentPacket = new Packet("BroadcastFragmentPkt");
             auto fragmentPayload = makeShared<BroadcastFragment>();
 
-            if (payloadSize + BROADCAST_FRAGMENT_META_SIZE > 255)
+            if (payloadSize + BROADCAST_FRAGMENT_META_SIZE > MAXIMUM_PACKET_SIZE)
             {
-                currentPayloadSize = 255 - BROADCAST_FRAGMENT_META_SIZE;
-                fragmentPayload->setChunkLength(B(255));
+                currentPayloadSize = MAXIMUM_PACKET_SIZE - BROADCAST_FRAGMENT_META_SIZE;
+                fragmentPayload->setChunkLength(B(MAXIMUM_PACKET_SIZE));
                 fragmentPayload->setPayloadSize(currentPayloadSize);
                 payloadSize = payloadSize - currentPayloadSize;
             }
@@ -203,10 +203,10 @@ namespace rlora
             auto fragmentPayload = makeShared<BroadcastFragment>();
 
             int currentPayloadSize = 0;
-            if (payloadSize + BROADCAST_FRAGMENT_META_SIZE > 255)
+            if (payloadSize + BROADCAST_FRAGMENT_META_SIZE > MAXIMUM_PACKET_SIZE)
             {
-                currentPayloadSize = 255 - BROADCAST_FRAGMENT_META_SIZE;
-                fragmentPayload->setChunkLength(B(255));
+                currentPayloadSize = MAXIMUM_PACKET_SIZE - BROADCAST_FRAGMENT_META_SIZE;
+                fragmentPayload->setChunkLength(B(MAXIMUM_PACKET_SIZE));
                 fragmentPayload->setPayloadSize(currentPayloadSize);
                 payloadSize = payloadSize - currentPayloadSize;
             }
@@ -260,7 +260,7 @@ namespace rlora
         }
 
         auto headerPayload = makeShared<BroadcastRts>();
-        headerPayload->setChunkLength(B(BROADCAST_HEADER_SIZE));
+        headerPayload->setChunkLength(B(BROADCAST_RTS_SIZE));
         headerPayload->setSize(payloadSize);
         headerPayload->setMissionId(missionId);
         headerPayload->setMessageId(headerPaket->getId());
@@ -289,7 +289,7 @@ namespace rlora
         }
 
         auto headerPayload = makeShared<BroadcastContinuousRts>();
-        headerPayload->setChunkLength(B(BROADCAST_CONTINIOUS_HEADER));
+        headerPayload->setChunkLength(B(BROADCAST_CONTINIOUS_RTS_SIZE));
         headerPayload->setPayloadSizeOfNextFragment(payloadSize + BROADCAST_FRAGMENT_META_SIZE);
         headerPayload->setHopId(nodeId);
         headerPayload->setMessageId(headerPaket->getId());
@@ -305,7 +305,6 @@ namespace rlora
         return headerPaket;
     }
 
-    // TODO: if we want to send Neighbour broadcast, then we dont need a separat header. Or just send leader fragment
     void PacketBase::createBroadcastPacketWithContinuousRTS(int payloadSize, int missionId, int source, bool isMission)
     {
         if (source == -1)
@@ -340,10 +339,10 @@ namespace rlora
             auto fragmentPayload = makeShared<BroadcastFragment>();
 
             int currentPayloadSize = 0;
-            if (payloadSize + BROADCAST_FRAGMENT_META_SIZE > 255)
+            if (payloadSize + BROADCAST_FRAGMENT_META_SIZE > MAXIMUM_PACKET_SIZE)
             {
-                currentPayloadSize = 255 - BROADCAST_FRAGMENT_META_SIZE;
-                fragmentPayload->setChunkLength(B(255));
+                currentPayloadSize = MAXIMUM_PACKET_SIZE - BROADCAST_FRAGMENT_META_SIZE;
+                fragmentPayload->setChunkLength(B(MAXIMUM_PACKET_SIZE));
                 fragmentPayload->setPayloadSize(currentPayloadSize);
                 payloadSize = payloadSize - currentPayloadSize;
             }

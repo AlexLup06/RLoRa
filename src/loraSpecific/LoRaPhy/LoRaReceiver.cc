@@ -20,7 +20,7 @@
 #include "inet/physicallayer/wireless/common/analogmodel/packetlevel/ScalarNoise.h"
 #include "LoRaPhyPreamble_m.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/SignalTag_m.h"
-#include "../../tags/MessageInfoTag_m.h"
+#include "../../common/tags/MessageInfoTag_m.h"
 
 namespace rlora {
 

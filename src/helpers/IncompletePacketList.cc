@@ -89,7 +89,7 @@ Result IncompletePacketList::addToIncompletePacket(const BroadcastFragment *pack
         result.isComplete = false;
         result.sendUp = false;
         result.isRelevant = false;
-        result.waitTime = 40 + predictSendTime(255);
+        result.waitTime = 40 + predictSendTime(MAXIMUM_PACKET_SIZE);
         return result;
     }
 
@@ -104,7 +104,7 @@ Result IncompletePacketList::addToIncompletePacket(const BroadcastFragment *pack
 
     int totalBytesReceived = incompletePacket->received + packet->getPayloadSize();
     int bytesLeft = incompletePacket->size - totalBytesReceived;
-    int waitTime = 20 + predictSendTime(bytesLeft > 255 ? 255 : bytesLeft);
+    int waitTime = 20 + predictSendTime(bytesLeft > MAXIMUM_PACKET_SIZE ? MAXIMUM_PACKET_SIZE : bytesLeft);
 
     incompletePacket->received = totalBytesReceived;
     incompletePacket->fragments[fragmentId] = true;

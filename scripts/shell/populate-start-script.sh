@@ -9,7 +9,7 @@ OUTFILE2=start-2.sh
 
 # Range parameters
 STEP=500
-END=67200   # we stop at 67199
+END=153600   # we stop at 153600
 START=0
 
 while [ $START -lt $END ]; do

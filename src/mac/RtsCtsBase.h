@@ -13,10 +13,10 @@ namespace rlora
     public:
     protected:
         simtime_t sifs = 0.002;
-        
+
         int cwBackoff = 16;
         simtime_t backoffFS = 0.019 + 0.003;
-        
+
         simtime_t ctsFS = 0.016 + 0.003;
         int cwCTS = 16;
 
@@ -47,16 +47,19 @@ namespace rlora
         void handleCTSTimeout(bool withRetry);
         void sendCTS(bool withRemainder);
         void sendRTS();
-        bool isCTSForSameRTSSource(Packet *msg);
-        bool isPacketFromRTSSource(Packet *msg);
-        bool isOurCTS(Packet *msg);
+        bool isCTSForSameRTSSource(Packet *packet);
+        bool isPacketFromRTSSource(Packet *packet);
+        bool isOurCTS(Packet *packet);
         bool isFreeToSend();
         bool withRTS();
         void clearRTSsource();
         void setRTSsource(int rtsSourceId);
 
-        bool isStrayCTS(Packet *msg);
-        void handleStrayCTS(Packet *msg, bool withRemainder);
+        bool isStrayCTS(Packet *packet);
+        void handleStrayCTS(Packet *packet, bool withRemainder);
+
+        bool isRTS(Packet *packet);
+        void handleUnhandeledRTS();
 
     private:
     };

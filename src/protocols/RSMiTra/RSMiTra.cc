@@ -57,11 +57,6 @@ namespace rlora
                                       RECEIVING,
                                       regularBackoff->cancelBackoffTimer();
                                       regularBackoff->decreaseBackoffPeriod(););
-                FSMA_Event_Transition(we - got - rts - now-- send - cts,
-                                      msg == initiateCTS && isFreeToSend(),
-                                      CW_CTS,
-                                      regularBackoff->cancelBackoffTimer();
-                                      regularBackoff->decreaseBackoffPeriod(););
             }
             FSMA_State(SEND_RTS)
             {
@@ -69,7 +64,7 @@ namespace rlora
                 FSMA_Event_Transition(transmitter - is - ready - to - send,
                                       msg == transmitSwitchDone,
                                       SEND_RTS,
-                                      sendRTS(););
+                                      sendRTS());
                 FSMA_Event_Transition(rts - was - sent - now - wait - cts,
                                       msg == endTransmission,
                                       WAIT_CTS, );
@@ -110,11 +105,11 @@ namespace rlora
                 FSMA_Event_Transition(send - data - now,
                                       msg == transmitSwitchDone,
                                       TRANSMITING,
-                                      sendDataFrame(););
+                                      sendDataFrame());
                 FSMA_Event_Transition(finished - transmission - turn - to - receiver,
                                       msg == endTransmission,
                                       SWITCHING,
-                                      finishCurrentTransmission(););
+                                      finishCurrentTransmission());
             }
             FSMA_State(CW_CTS)
             {
@@ -236,7 +231,7 @@ namespace rlora
 
             addPacketToList(incompletePacket, isMissionMsg);
 
-            int sizeOfFragment = msg->getSize() > 255 - BROADCAST_FRAGMENT_META_SIZE ? 255 : msg->getSize() + BROADCAST_FRAGMENT_META_SIZE;
+            int sizeOfFragment = msg->getSize() > MAXIMUM_PACKET_SIZE - BROADCAST_FRAGMENT_META_SIZE ? MAXIMUM_PACKET_SIZE : msg->getSize() + BROADCAST_FRAGMENT_META_SIZE;
             scheduleAfter(0, initiateCTS);
             sizeOfFragment_CTSData = sizeOfFragment;
             sourceOfRTS_CTSData = msg->getHop();

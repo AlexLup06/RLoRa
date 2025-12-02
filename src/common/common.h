@@ -38,13 +38,13 @@
 #include "../helpers/DataLogger.h"
 #include "../helpers/BackoffHandler.h"
 
-#include "../tags/MessageInfoTag_m.h"
-#include "../tags/WaitTimeTag_m.h"
-#include "../messages/NodeAnnounce_m.h"
-#include "../messages/BroadcastRts_m.h"
-#include "../messages/BroadcastContinuousRts_m.h"
-#include "../messages/BroadcastLeaderFragment_m.h"
-#include "../messages/BroadcastCTS_m.h"
-#include "../messages/BroadcastFragment_m.h"
+#include "./tags/MessageInfoTag_m.h"
+#include "./tags/WaitTimeTag_m.h"
+#include "./messages/NodeAnnounce_m.h"
+#include "./messages/BroadcastRts_m.h"
+#include "./messages/BroadcastContinuousRts_m.h"
+#include "./messages/BroadcastLeaderFragment_m.h"
+#include "./messages/BroadcastCTS_m.h"
+#include "./messages/BroadcastFragment_m.h"
 
 #endif

@@ -7,7 +7,7 @@
 
 #include "inet/common/Units.h"
 
-#include "../messages/BroadcastFragment_m.h"
+#include "../common/messages/BroadcastFragment_m.h"
 #include "generalHelpers.h"
 #include <unordered_map>
 

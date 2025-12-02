@@ -41,4 +41,10 @@ namespace rlora
         owner->cancelEvent(endBackoff);
     }
 
+    void BackoffHandler::increaseCw()
+    {
+        if (cw < cwCONST * 2)
+            cw = cwCONST * 2;
+    }
+    void BackoffHandler::resetCw() { cw = cwCONST; }
 }

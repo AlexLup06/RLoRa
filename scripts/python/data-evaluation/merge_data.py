@@ -4,12 +4,16 @@ import re
 import statistics
 import msgpack
 import msgpack_numpy as m
+import math
+from scipy import stats
+
 m.patch()  # allow numpy + float encoding
 
 # Root directory
 root_dir = os.path.join(os.getenv("rlora_root"), "data")
 
 SAVE_AS_MSGPACK = False  # set False if you want normal JSON output again
+
 
 # ----------------------------------------------------------
 # Generic file handler
@@ -25,7 +29,9 @@ def process_json_file(root, filename, modify_func):
 
         # Skip already-processed files (flattened data)
         if isinstance(experiment.get("vectors"), list):
-            if experiment["vectors"] and isinstance(experiment["vectors"][0], (int, float)):
+            if experiment["vectors"] and isinstance(
+                experiment["vectors"][0], (int, float)
+            ):
                 print(f"⚠️ Skipping already-processed file: {filename}")
                 return
 
@@ -62,7 +68,6 @@ def process_json_file(root, filename, modify_func):
         print(f"❌ Failed to process {filepath}: {e}")
 
 
-
 # ----------------------------------------------------------
 # Custom file type logic
 # ----------------------------------------------------------
@@ -81,7 +86,7 @@ def modify_time_on_air(exp):
 
     # Compute Jain's Fairness Index
     s = sum(times)
-    sq = sum(t*t for t in times)
+    sq = sum(t * t for t in times)
     n = len(times)
 
     fairness = (s * s) / (n * sq) if sq > 0 else 1.0
@@ -92,18 +97,13 @@ def modify_time_on_air(exp):
 
 # "vectors": [
 #   {
-#     "sent": [12, 8, 15],
-#     "rec": [10, 8, 14]
+#       "mean": float,
+#       "std": float,
+#       "ci95": [lower_bound, upper_bound]
 #   }
 # ]
 def modify_received_id(exp):
-    """Count absolute/positive occurrences of each ID.
-    Output as compact dict of arrays:
-    {
-        "sent": [12, 8, 15],
-        "rec": [10, 8, 14]
-    }
-    """
+    """Compute delivery ratio statistics (rec/sent) per ID."""
     id_stats = {}
 
     for vec in exp.get("vectors", []):
@@ -116,9 +116,18 @@ def modify_received_id(exp):
             if val >= 0:
                 id_stats[mid]["rec"] += 1
 
+    # Compute delivery ratios
+    ratios = [s["rec"] / s["sent"] for s in id_stats.values() if s["sent"] > 0]
+
+    n = len(ratios)
+    mean = sum(ratios) / n
+    std = math.sqrt(sum((x - mean) ** 2 for x in ratios) / (n - 1)) if n > 1 else 0
+    ci95_margin = stats.t.ppf(0.975, df=n - 1) * (std / math.sqrt(n)) if n > 1 else 0
+
     exp["vectors"] = {
-        "sent": [s["sent"] for s in id_stats.values()],
-        "rec": [s["rec"] for s in id_stats.values()],
+        "mean": mean,
+        "std": std,
+        "ci95": [mean - ci95_margin, mean + ci95_margin],
     }
 
 
@@ -139,8 +148,8 @@ def modify_mission_id(exp):
         return
 
     # --- Collect events per node ---
-    mission_sent = {}      # node -> {mission_id: time}
-    mission_rts = {}       # node -> {mission_id: time}
+    mission_sent = {}  # node -> {mission_id: time}
+    mission_rts = {}  # node -> {mission_id: time}
     mission_received = {}  # node -> {mission_id: time}
 
     for v in vectors:
@@ -213,7 +222,6 @@ def modify_mission_id(exp):
         "propagation_time_fragment": prop_frag,
         "receivers": num_receivers,
     }
-
 
 
 def modify_time_of_last_trajectory(exp):

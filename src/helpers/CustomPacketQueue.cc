@@ -1,12 +1,4 @@
-/*
- * CustomPacketQueue.cpp
- *
- *  Created on: 5 Mar 2025
- *      Author: alexanderlupatsiy
- */
-
 #include "CustomPacketQueue.h"
-#include "../tags/MessageInfoTag_m.h"
 
 namespace rlora {
 

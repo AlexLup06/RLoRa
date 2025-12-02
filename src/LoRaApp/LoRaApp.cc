@@ -59,7 +59,6 @@ namespace rlora
         }
         else
         {
-            EV << "Got some other msg" << endl;
             delete msg;
         }
     }

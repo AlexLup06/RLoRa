@@ -16,7 +16,8 @@ namespace rlora
               backoffPeriod(-1),
               endBackoff(_endBackoff),
               slotTime(_slotTime),
-              cw(_cw)
+              cw(_cw),
+              cwCONST(_cw)
         {
         }
 
@@ -27,16 +28,19 @@ namespace rlora
         void scheduleBackoffTimer();
         void cancelBackoffTimer();
 
-        cSimpleModule *owner;
+        void increaseCw();
+        void resetCw();
 
         int chosenSlot = 0;
-
-        simtime_t backoffPeriod;
-        cMessage *endBackoff;
         int remainder = 0;
 
+    private:
         simtime_t slotTime;
         int cw;
+        cMessage *endBackoff;
+        simtime_t backoffPeriod;
+        cSimpleModule *owner;
+        int cwCONST;
     };
 }
 

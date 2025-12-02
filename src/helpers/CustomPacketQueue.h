@@ -3,6 +3,7 @@
 
 #include <list>
 #include "inet/common/packet/Packet.h"
+#include "../common/tags/MessageInfoTag_m.h"
 
 using namespace std;
 using namespace inet;
