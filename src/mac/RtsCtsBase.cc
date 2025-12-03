@@ -157,8 +157,9 @@ namespace rlora
     void RtsCtsBase::sendRTS()
     {
         auto header = getCurrentTransmission();
-        auto typeTag = header->getTag<MessageInfoTag>();
-        ASSERT(typeTag->isHeader());
+        auto infoTag = header->getTag<MessageInfoTag>();
+        ASSERT(infoTag->isHeader());
+        emit(missionIdRtsSent, infoTag->getMissionId());
 
         scheduleAfter(
             ctsFS * (cwCTS - 1) + sifs + 0.003 +

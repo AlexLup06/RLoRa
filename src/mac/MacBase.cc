@@ -12,7 +12,6 @@ namespace rlora
 
             moreMessagesToSend = new cMessage("moreMessagesToSend");
 
-            missionIdFragmentSent = registerSignal("missionIdFragmentSent");
             missionIdRtsSent = registerSignal("missionIdRtsSent");
             receivedMissionId = registerSignal("receivedMissionId");
         }
@@ -123,10 +122,6 @@ namespace rlora
             if (infoTag->isHeader())
             {
                 emit(missionIdRtsSent, infoTag->getMissionId());
-            }
-            else
-            {
-                emit(missionIdFragmentSent, infoTag->getMissionId());
             }
         }
 

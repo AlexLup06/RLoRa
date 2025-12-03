@@ -19,7 +19,7 @@ for file in $SOURCE_DIR*.vec; do
         
         opp_scavetool export -f 'name=~"timeOnAir:vector"' -o $rlora_root/data/${protocol}/${range}/timeOnAir-${mobility}-${count}.json -F JSON ${SOURCE_DIR}mac${protocol}-maxX${range}-ttnm${interval}-numberNodes${nodes}-m${mobility}-rep${rep}.vec
               
-        opp_scavetool export -f 'name=~"missionIdRtsSent:vector" OR name=~"missionIdFragmentSent:vector" OR name=~"receivedMissionId:vector"' -o $rlora_root/data/${protocol}/${range}/missionId-${mobility}-${count}.json -F JSON ${SOURCE_DIR}mac${protocol}-maxX${range}-ttnm${interval}-numberNodes${nodes}-m${mobility}-rep${rep}.vec
+        opp_scavetool export -f 'name=~"missionIdRtsSent:vector" OR name=~"receivedMissionId:vector"' -o $rlora_root/data/${protocol}/${range}/missionId-${mobility}-${count}.json -F JSON ${SOURCE_DIR}mac${protocol}-maxX${range}-ttnm${interval}-numberNodes${nodes}-m${mobility}-rep${rep}.vec
 
         opp_scavetool export -f 'name=~"receivedId:vector"' -o $rlora_root/data/${protocol}/${range}/idReceived-${mobility}-${count}.json -F JSON ${SOURCE_DIR}mac${protocol}-maxX${range}-ttnm${interval}-numberNodes${nodes}-m${mobility}-rep${rep}.vec
 

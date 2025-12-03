@@ -41,7 +41,6 @@ namespace rlora
         cMessage *moreMessagesToSend = nullptr;
 
         simsignal_t receivedMissionId;
-        simsignal_t missionIdFragmentSent;
         simsignal_t missionIdRtsSent;
 
     private:

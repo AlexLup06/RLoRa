@@ -37,7 +37,7 @@ while [ $START -lt $END ]; do
         STOP=$((END - 1))
     fi
 
-    echo "opp_runall -j80 ./out/clang-release/src/rlora -f omnetpp.ini -c GaussMarkovMobility -u Cmdenv -n ./src:./src:./../inet4.4/src -l ./../inet4.4/src/INET -r ${START}..${STOP}" >> "$OUTFILE2"
+    echo "opp_runall -j80 ./out/clang-release/src/rlora -f ./simulations/omnetpp.ini -c GaussMarkovMobility -u Cmdenv -n ./simulations:./src:./../inet4.4/src -l ./../inet4.4/src/INET -r ${START}..${STOP}" >> "$OUTFILE2"
 
     START=$((STOP + 1))
 done
