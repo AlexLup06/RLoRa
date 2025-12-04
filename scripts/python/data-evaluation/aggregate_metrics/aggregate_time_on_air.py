@@ -114,16 +114,18 @@ def build_filename(metadata: Dict[str, str]) -> str:
 
 
 def read_time_on_air(path: str) -> Tuple[Dict[str, str], float]:
-    """Load metadata and scalar value from a timeOnAir export."""
+    """Load metadata and scalar value from a flattened timeOnAir export."""
     with open(path, "r") as handle:
         payload = json.load(handle)
 
-    if not payload:
-        raise ValueError("Empty JSON payload")
+    if not isinstance(payload, dict):
+        raise ValueError("Unexpected JSON payload")
 
-    experiment = payload[next(iter(payload))]
-    meta = normalize_metadata(experiment.get("itervars", {}))
-    value = extract_scalar(experiment.get("vectors"))
+    meta_raw = payload.get("metadata", {})
+    value_raw = payload.get("results")
+
+    meta = normalize_metadata(meta_raw)
+    value = extract_scalar(value_raw)
     return meta, value
 
 

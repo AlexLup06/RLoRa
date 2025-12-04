@@ -1,5 +1,3 @@
-"""Dispatcher to run all metric aggregation steps."""
-
 from typing import Callable, List, Tuple
 
 from aggregate_metrics import (
@@ -8,7 +6,6 @@ from aggregate_metrics import (
     aggregate_normalized_data_throughput,
     aggregate_time_on_air,
 )
-
 
 Aggregator = Tuple[str, Callable[[], None]]
 

@@ -14,26 +14,24 @@ root_dir = os.path.join(os.getenv("rlora_root"), "data")
 
 SAVE_AS_MSGPACK = False  # set False if you want normal JSON output again
 
-
-# ----------------------------------------------------------
-# Generic file handler
-# ----------------------------------------------------------
 def process_json_file(root, filename, modify_func):
     filepath = os.path.join(root, filename)
     try:
         with open(filepath, "r") as f:
             data = json.load(f)
 
+        # Skip already-processed files
+        if isinstance(data, dict) and set(data.keys()) == {"metadata", "results"}:
+            print(f"⚠️ Skipping already-processed file: {filename}")
+            return
+
         top_key = next(iter(data))
         experiment = data[top_key]
 
-        # Skip already-processed files (flattened data)
-        if isinstance(experiment.get("vectors"), list):
-            if experiment["vectors"] and isinstance(
-                experiment["vectors"][0], (int, float)
-            ):
-                print(f"⚠️ Skipping already-processed file: {filename}")
-                return
+        # If this shape doesn't match expected, bail early
+        if not isinstance(experiment, dict):
+            print(f"⚠️ Unexpected format, skipping: {filename}")
+            return
 
         # Clean metadata (remove quotes, drop unused)
         itervars = experiment.get("itervars", {})
@@ -47,11 +45,17 @@ def process_json_file(root, filename, modify_func):
         # Run custom handler
         modify_func(experiment)
 
+        # Final shape
+        new_data = {
+            "metadata": experiment.get("itervars", {}),
+            "results": experiment.get("vectors", {}),
+        }
+
         # Determine output path and save format
         if SAVE_AS_MSGPACK:
             msgpack_path = filepath.replace(".json", ".msgpack")
             with open(msgpack_path, "wb") as f:
-                msgpack.dump(data, f, default=m.encode)
+                msgpack.dump(new_data, f, default=m.encode)
 
             # Delete original JSON only if .msgpack exists and non-empty
             if os.path.exists(msgpack_path) and os.path.getsize(msgpack_path) > 0:
@@ -61,19 +65,13 @@ def process_json_file(root, filename, modify_func):
                 print(f"⚠️ Skipped deletion (empty or missing): {filename}")
         else:
             with open(filepath, "w") as f:
-                json.dump(data, f, indent=2)
+                json.dump(new_data, f, indent=2)
             print(f"✅ Processed {filename}")
 
     except Exception as e:
         print(f"❌ Failed to process {filepath}: {e}")
 
-
-# ----------------------------------------------------------
-# Custom file type logic
-# ----------------------------------------------------------
-
-
-# "vectors": [0.6, 0.1, 1.0, ...]
+# "results": [0.678]
 def modify_time_on_air(exp):
     """Compute Jain's Fairness Index over the time-on-air values."""
     vectors = exp.get("vectors", [])
@@ -95,7 +93,7 @@ def modify_time_on_air(exp):
     exp["vectors"] = fairness
 
 
-# "vectors": [
+# "results": [
 #   {
 #       "mean": float,
 #       "std": float,
@@ -130,27 +128,23 @@ def modify_received_id(exp):
         "ci95": [mean - ci95_margin, mean + ci95_margin],
     }
 
-
 # {
-#   "vectors": {
-#     "missionId": [5696, 5697, 5698],
-#     "propagation_time_rts": [null, 0.245, 0.389],
-#     "propagation_time_fragment": [0.334, 0.400, 0.512]
-#     "receivers": [4, 6, 1]
+#   "results": {
+#     "propagation_time": {"mean": 0.245, "std": 0.05, "ci95": [0.21, 0.28]},
+#     "receiver_ratio": {"mean": 0.6, "std": 0.1, "ci95": [0.55, 0.65]},
+#     "receiver_ratio_full": 0.4
 #   }
 # }
 def modify_mission_id(exp):
-    """Compute propagation times (RTS and fragment based) per mission ID
-    and count how many nodes received the mission message."""
+    """Compute propagation time per mission ID and how broadly it was received."""
     vectors = exp.get("vectors", [])
     if not vectors:
         exp["vectors"] = []
         return
 
-    # --- Collect events per node ---
-    mission_sent = {}  # node -> {mission_id: time}
-    mission_rts = {}  # node -> {mission_id: time}
-    mission_received = {}  # node -> {mission_id: time}
+    mission_rts = {}
+    mission_received = {}
+    seen_nodes = set()
 
     for v in vectors:
         name = v.get("name", "")
@@ -162,21 +156,22 @@ def modify_mission_id(exp):
         if not node_match:
             continue
         node = int(node_match.group(1))
+        seen_nodes.add(node)
 
         for t, val in zip(times, values):
             if val == -1:
                 continue
             mid = int(val)
-            if "missionIdFragmentSent" in name:
-                mission_sent.setdefault(node, {})[mid] = t
-            elif "missionIdRtsSent" in name:
+            if "missionIdRtsSent" in name:
                 mission_rts.setdefault(node, {})[mid] = t
             elif "receivedMissionId" in name:
                 mission_received.setdefault(node, {})[mid] = t
 
-    # --- Collect all mission IDs ---
+    total_nodes = (max(seen_nodes) + 1) if seen_nodes else 0
+    denom = total_nodes - 1
+
     all_mission_ids = set()
-    for d in (mission_sent, mission_rts, mission_received):
+    for d in (mission_rts, mission_received):
         for node_data in d.values():
             all_mission_ids.update(node_data.keys())
 
@@ -184,83 +179,76 @@ def modify_mission_id(exp):
         exp["vectors"] = []
         return
 
-    # --- Compute propagation times ---
-    mission_ids = []
-    prop_rts = []
-    prop_frag = []
-    num_receivers = []
+    prop_times = []
+    receiver_ratio = []
 
     for mid in sorted(all_mission_ids):
-        # earliest RTS and fragment sends
         rts_times = [t for d in mission_rts.values() if mid in d for t in [d[mid]]]
-        frag_times = [t for d in mission_sent.values() if mid in d for t in [d[mid]]]
-
-        if not rts_times and not frag_times:
+        if not rts_times:
             continue
 
         first_rts = min(rts_times) if rts_times else None
-        first_fragment = min(frag_times) if frag_times else None
 
-        # all reception times for this mission
         rec_times = [d[mid] for d in mission_received.values() if mid in d]
         if not rec_times:
             continue
         last_rec = max(rec_times)
-        receiver_count = len(rec_times)
 
         delay_rts = (last_rec - first_rts) if first_rts is not None else None
-        delay_frag = (last_rec - first_fragment) if first_fragment is not None else None
+        ratio = (len(rec_times) / denom) if denom > 0 else None
 
-        mission_ids.append(mid)
-        prop_rts.append(round(delay_rts, 3) if delay_rts is not None else None)
-        prop_frag.append(round(delay_frag, 3) if delay_frag is not None else None)
-        num_receivers.append(receiver_count)
+        prop_times.append(round(delay_rts, 3) if delay_rts is not None else None)
+        receiver_ratio.append(round(ratio, 3) if ratio is not None else None)
+
+    def summarize(values):
+        valid = [v for v in values if v is not None]
+        if not valid:
+            return {"mean": None, "std": None, "ci95": [None, None]}
+        n = len(valid)
+        mean = sum(valid) / n
+        if n > 1:
+            variance = sum((x - mean) ** 2 for x in valid) / (n - 1)
+            std = math.sqrt(variance)
+            margin = stats.t.ppf(0.975, df=n - 1) * (std / math.sqrt(n))
+        else:
+            std = 0.0
+            margin = 0.0
+        return {
+            "mean": round(mean, 3),
+            "std": round(std, 3),
+            "ci95": [round(mean - margin, 3), round(mean + margin, 3)],
+        }
+
+    prop_times_full = [
+        pt
+        for pt, rr in zip(prop_times, receiver_ratio)
+        if rr is not None and math.isclose(rr, 1.0, rel_tol=1e-9, abs_tol=1e-9)
+    ]
+    receiver_ratio_valid = [rr for rr in receiver_ratio if rr is not None]
+
+    full_count = sum(
+        1
+        for rr in receiver_ratio_valid
+        if math.isclose(rr, 1.0, rel_tol=1e-9, abs_tol=1e-9)
+    )
+    full_ratio = (
+        round(full_count / len(receiver_ratio_valid), 3)
+        if receiver_ratio_valid
+        else None
+    )
 
     exp["vectors"] = {
-        "missionId": mission_ids,
-        "propagation_time_rts": prop_rts,
-        "propagation_time_fragment": prop_frag,
-        "receivers": num_receivers,
+        "propagation_time": summarize(prop_times_full),
+        "receiver_ratio": summarize(receiver_ratio_valid),
+        "receiver_ratio_full": full_ratio,
     }
 
-
-def modify_time_of_last_trajectory(exp):
-    """Replace with only cleaned arrays of trajectory times (remove sentinel 92233720.368548)."""
-
-    vectors = exp.get("vectors", [])
-    cleaned = []
-
-    for v in vectors:
-        if not isinstance(v, dict):
-            continue
-        name = v.get("name", "")
-        if "timeOfLastTrajectory" not in name:
-            continue
-
-        values = v.get("value", [])
-        # Remove *all* occurrences of the invalid sentinel
-        filtered = [val for val in values if abs(val - 92233720.368548) > 1e-3]
-        if filtered:
-            cleaned.append(filtered)
-
-    # Replace with a clean array of arrays
-    exp["vectors"] = cleaned
-
-
-# ----------------------------------------------------------
-# Dispatcher map (regex → handler)
-# ----------------------------------------------------------
 pattern_map = {
-    r"^timeOnAir-(MassMobility|GaussMarkovMobility)-\d+\.json$": modify_time_on_air,
-    r"^idReceived-(MassMobility|GaussMarkovMobility)-\d+\.json$": modify_received_id,
-    r"^missionId-(MassMobility|GaussMarkovMobility)-\d+\.json$": modify_mission_id,
-    r"^timeOfLastTrajectory-(MassMobility|GaussMarkovMobility)-\d+\.json$": modify_time_of_last_trajectory,
+    r"^timeOnAir-.*\.json$": modify_time_on_air,
+    r"^idReceived-.*\.json$": modify_received_id,
+    r"^missionId-.*\.json$": modify_mission_id,
 }
 
-
-# ----------------------------------------------------------
-# Walk directory and dispatch
-# ----------------------------------------------------------
 def process_all_json(root_dir):
     for root, _, files in os.walk(root_dir):
         for filename in files:
@@ -269,9 +257,5 @@ def process_all_json(root_dir):
                     process_json_file(root, filename, func)
                     break  # only process once per file
 
-
-# ----------------------------------------------------------
-# Entry point
-# ----------------------------------------------------------
 if __name__ == "__main__":
     process_all_json(root_dir)

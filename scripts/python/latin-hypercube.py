@@ -6,8 +6,9 @@ import os
 BASE_DIR = os.getenv("rlora_root") or os.getcwd()
 
 # Ranges
-robot_range = [10, 100]        # node count 
-msg_rate_range = [1/120, 10] # messages per second
+robot_range = [10, 100]  # node count
+# time-to-next-mission choices (seconds): 0.1-0.9 step 0.1, then 1..120
+ttnm_choices = [round(0.1 * i, 1) for i in range(1, 10)] + list(range(1, 121))
 
 # LHS setup
 n_samples = 400
@@ -20,8 +21,8 @@ lhs_samples = sampler.random(n=n_samples)
 # ------------------------------------------------------
 
 # Choose mean and std for the robot count distribution
-robot_mu = 25       # average number of nodes
-robot_sigma = 25    # spread
+robot_mu = 25  # average number of nodes
+robot_sigma = 25  # spread
 
 # Compute truncation bounds
 a_r = (robot_range[0] - robot_mu) / robot_sigma
@@ -37,18 +38,16 @@ robot_samples = np.clip(robot_samples, robot_range[0], robot_range[1])
 robot_samples = np.round(robot_samples).astype(int)
 
 # ------------------------------------------------------
-# 2. MESSAGE RATE — truncated normal distribution
+# 2. TIME TO NEXT MISSION — pick from discrete choices
 # ------------------------------------------------------
 
-mu, sigma = 0.05, 0.1   # mean=1/20s, std deviation
-a, b = (msg_rate_range[0] - mu) / sigma, (msg_rate_range[1] - mu) / sigma
-trunc_norm = truncnorm(a, b, loc=mu, scale=sigma)
+def pick_ttnm(sample: float) -> float:
+    """Map a [0,1) sample to a discrete ttnm choice."""
+    idx = min(int(sample * len(ttnm_choices)), len(ttnm_choices) - 1)
+    return float(ttnm_choices[idx])
 
-msg_rate_samples = trunc_norm.ppf(lhs_samples[:, 1])
 
-# Convert messages/sec → seconds/message (ttnm)
-ttnm_values = 1 / msg_rate_samples
-ttnm_values = np.clip(ttnm_values, 0.1, 60)
+ttnm_values = [pick_ttnm(s) for s in lhs_samples[:, 1]]
 
 # ------------------------------------------------------
 # 3. Write output file
