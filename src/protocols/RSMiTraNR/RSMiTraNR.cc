@@ -17,7 +17,6 @@ namespace rlora
             decapsulate(packet);
         }
 
-
         FSMA_Switch(fsm)
         {
             FSMA_State(SWITCHING)
@@ -132,6 +131,11 @@ namespace rlora
                                       ctsBackoff->cancelBackoffTimer();
                                       handlePacket(packet);
                                       scheduleAfter(sifs, shortWait););
+                FSMA_Event_Transition(got - packet - from - rts - source,
+                                      !ctsCWTimeout->isScheduled() && isPacketNotFromRTSSource(packet),
+                                      SWITCHING,
+                                      ctsBackoff->invalidateBackoffPeriod();
+                                      scheduleAfter(sifs, shortWait));
             }
             FSMA_State(SEND_CTS)
             {

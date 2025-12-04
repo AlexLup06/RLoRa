@@ -271,6 +271,32 @@ namespace rlora
         return false;
     }
 
+    bool RtsCtsBase::isPacketNotFromRTSSource(Packet *packet)
+    {
+        if (packet == nullptr)
+        {
+            return false;
+        }
+
+        auto chunk = packet->peekAtFront<inet::Chunk>();
+        if (auto fragment = dynamic_cast<const BroadcastFragment *>(chunk.get()))
+        {
+            auto infoTag = packet->getTag<MessageInfoTag>();
+            if (infoTag->getHopId() != rtsSource)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+        else
+        {
+            return true;
+        }
+    }
+
     //============================================================
     // handle packets
     //============================================================

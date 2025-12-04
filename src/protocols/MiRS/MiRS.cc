@@ -118,17 +118,24 @@ namespace rlora
                                       msg == ctsCWTimeout && !isReceiving(),
                                       SEND_CTS,
                                       ctsBackoff->invalidateBackoffPeriod(););
+                FSMA_Event_Transition(got - packet - from - rts - source,
+                                      isPacketFromRTSSource(packet),
+                                      SWITCHING,
+                                      ctsBackoff->invalidateBackoffPeriod();
+                                      ctsBackoff->cancelBackoffTimer();
+                                      handlePacket(packet);
+                                      scheduleAfter(sifs, shortWait););
                 FSMA_Event_Transition(got cts sent to same source as we want to send to,
                                       isCTSForSameRTSSource(packet),
                                       AWAIT_TRANSMISSION,
                                       ctsBackoff->invalidateBackoffPeriod();
                                       ctsBackoff->cancelBackoffTimer();
                                       scheduleAfter(sifs, transmissionStartTimeout););
-                FSMA_Event_Transition(got packet from rts source,
-                                      isPacketFromRTSSource(packet),
-                                      RECEIVING,
+                FSMA_Event_Transition(got - packet - from - rts - source,
+                                      !ctsCWTimeout->isScheduled() && isPacketNotFromRTSSource(packet),
+                                      SWITCHING,
                                       ctsBackoff->invalidateBackoffPeriod();
-                                      ctsBackoff->cancelBackoffTimer(););
+                                      scheduleAfter(sifs, shortWait));
             }
             FSMA_State(SEND_CTS)
             {

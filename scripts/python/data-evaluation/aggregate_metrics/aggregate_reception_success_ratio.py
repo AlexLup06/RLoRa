@@ -64,8 +64,8 @@ def normalize_metadata(meta: Dict[str, str]) -> Dict[str, object]:
     return normalized
 
 
-def read_reachability(path: str) -> Tuple[Dict[str, object], float]:
-    """Load reachability value and metadata from flattened idReceived json."""
+def read_ratio(path: str) -> Tuple[Dict[str, object], float]:
+    """Load reception success ratio and metadata from flattened idReceived json."""
     with open(path, "r") as handle:
         payload = json.load(handle)
 
@@ -82,8 +82,8 @@ def read_reachability(path: str) -> Tuple[Dict[str, object], float]:
     return meta, value
 
 
-def aggregate_node_reachability() -> None:
-    """Aggregate node reachability grouped by metadata (excluding mobility)."""
+def aggregate_reception_success_ratio() -> None:
+    """Aggregate reception success ratio grouped by metadata (excluding mobility)."""
     groups: Dict[Tuple[str, Tuple[Tuple[str, object], ...]], List[float]] = defaultdict(
         list
     )
@@ -99,7 +99,7 @@ def aggregate_node_reachability() -> None:
 
             path = os.path.join(root, filename)
             try:
-                meta, value = read_reachability(path)
+                meta, value = read_ratio(path)
             except Exception as exc:
                 print(f"Skipping {path}: {exc}")
                 continue
@@ -120,7 +120,7 @@ def aggregate_node_reachability() -> None:
         entry = {"metadata": metadata, "data": stats}
         protocol_dim_entries[protocol][dim].append(entry)
 
-    output_dir = os.path.join(OUTPUT_DIR, "node-reachability")
+    output_dir = os.path.join(OUTPUT_DIR, "reception-success-ratio")
     os.makedirs(output_dir, exist_ok=True)
 
     for protocol, dim_map in protocol_dim_entries.items():
@@ -144,7 +144,7 @@ def aggregate_node_reachability() -> None:
                 ],
             }
             outfile = os.path.join(
-                output_dir, f"{protocol_lower}_{dim_safe}_node-reachability.json"
+                output_dir, f"{protocol_lower}_{dim_safe}_reception-success-ratio.json"
             )
             with open(outfile, "w") as handle:
                 json.dump(payload, handle, indent=2)
@@ -152,4 +152,4 @@ def aggregate_node_reachability() -> None:
 
 
 if __name__ == "__main__":
-    aggregate_node_reachability()
+    aggregate_reception_success_ratio()

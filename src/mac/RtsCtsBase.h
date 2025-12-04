@@ -61,6 +61,8 @@ namespace rlora
         bool isRTS(Packet *packet);
         void handleUnhandeledRTS();
 
+        bool isPacketNotFromRTSSource(Packet *packet);
+
     private:
     };
 }

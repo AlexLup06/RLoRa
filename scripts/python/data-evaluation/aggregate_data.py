@@ -3,8 +3,9 @@ from typing import Callable, List, Tuple
 from aggregate_metrics import (
     aggregate_collision_per_node,
     aggregate_mac_efficiency,
-    aggregate_node_reachability,
+    aggregate_node_reachibility,
     aggregate_normalized_data_throughput,
+    aggregate_reception_success_ratio,
     aggregate_time_on_air,
 )
 
@@ -31,8 +32,12 @@ if __name__ == "__main__":
             aggregate_normalized_data_throughput.aggregate_normalized_data_throughput,
         ),
         (
-            "nodeReachability",
-            aggregate_node_reachability.aggregate_node_reachability,
+            "receptionSuccessRatio",
+            aggregate_reception_success_ratio.aggregate_reception_success_ratio,
+        ),
+        (
+            "nodeReachibility",
+            aggregate_node_reachibility.aggregate_node_reachibility,
         ),
     ]
     run_all(AGGREGATORS)
