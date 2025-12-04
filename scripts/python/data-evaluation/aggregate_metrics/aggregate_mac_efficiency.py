@@ -14,7 +14,7 @@ OUTPUT_DIR = os.path.join(BASE_DIR, "data_aggregated")
 
 TXT_PATTERN = re.compile(
     r"mac(?P<protocol>[A-Za-z0-9]+)-maxX(?P<maxX>[0-9]+m)-ttnm(?P<ttnm>[0-9.]+)s-"
-    r"numberNodes(?P<nodes>[0-9]+)-m(?P<mobility>[A-Za-z]+)-rep(?P<rep>[0-9]+)\.txt$"
+    r"numberNodes(?P<nodes>[0-9]+)-m(?P<mobility>[A-Za-z]+)-(?P<run>[0-9]+)\.txt$"
 )
 
 
@@ -38,17 +38,22 @@ def compute_stats(values: Iterable[float]) -> Dict[str, float]:
     }
 
 
-def _read_first_value(lines: List[str], label: str) -> float:
+def _read_values_after_label(lines: List[str], label: str) -> List[float]:
+    """Return consecutive numeric values following a label line."""
     try:
         idx = lines.index(label)
     except ValueError as exc:
         raise ValueError(f"Label '{label}' missing") from exc
-    if idx + 1 >= len(lines):
-        raise ValueError(f"No value after label '{label}'")
-    try:
-        return float(lines[idx + 1])
-    except ValueError as exc:
-        raise ValueError(f"Value after '{label}' is not numeric") from exc
+
+    values: List[float] = []
+    for entry in lines[idx + 1 :]:
+        try:
+            values.append(float(entry))
+        except ValueError:
+            break
+    if not values:
+        raise ValueError(f"No numeric values after label '{label}'")
+    return values
 
 
 def parse_file(path: str) -> Tuple[Dict[str, str], float]:
@@ -65,13 +70,18 @@ def parse_file(path: str) -> Tuple[Dict[str, str], float]:
 
     with open(path, "r") as handle:
         lines = [line.strip() for line in handle.readlines() if line.strip()]
-    data_bytes = _read_first_value(lines, "Effective Bytes")
-    total_bytes = _read_first_value(lines, "Bytes")
 
-    if total_bytes == 0:
-        raise ValueError("Total bytes is zero")
+    bytes_received = _read_values_after_label(lines, "Bytes Received")
+    if len(bytes_received) < 2:
+        raise ValueError("Expected two values after 'Bytes Received'")
 
-    efficiency = data_bytes / total_bytes
+    b_data = bytes_received[0]
+    b_other = bytes_received[1]
+
+    if b_other == 0:
+        raise ValueError("Denominator (second 'Bytes Received' value) is zero")
+
+    efficiency = b_data / b_other
     metadata = {
         "macProtocol": protocol,
         "dimensions": max_x,

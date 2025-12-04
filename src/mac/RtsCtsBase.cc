@@ -259,7 +259,6 @@ namespace rlora
         }
 
         auto chunk = packet->peekAtFront<inet::Chunk>();
-
         if (auto fragment = dynamic_cast<const BroadcastFragment *>(chunk.get()))
         {
             auto infoTag = packet->getTag<MessageInfoTag>();
@@ -268,6 +267,49 @@ namespace rlora
                 clearRTSsource();
                 return true;
             }
+        }
+        return false;
+    }
+
+    bool RtsCtsBase::isNotOurDataPacket(Packet *packet)
+    {
+        if (packet == nullptr)
+        {
+            return false;
+        }
+
+        auto chunk = packet->peekAtFront<inet::Chunk>();
+        if (auto fragment = dynamic_cast<const BroadcastFragment *>(chunk.get()))
+        {
+            auto infoTag = packet->getTag<MessageInfoTag>();
+            if (infoTag->getHopId() != rtsSource)
+            {
+                clearRTSsource();
+                return true;
+            }
+        }
+        else if (auto fragment = dynamic_cast<const BroadcastLeaderFragment *>(chunk.get()))
+        {
+            return true;
+        }
+        return false;
+    }
+
+    bool RtsCtsBase::isDataPacket(Packet *packet)
+    {
+        if (packet == nullptr)
+        {
+            return false;
+        }
+
+        auto chunk = packet->peekAtFront<inet::Chunk>();
+        if (auto fragment = dynamic_cast<const BroadcastFragment *>(chunk.get()))
+        {
+            return true;
+        }
+        else if (auto fragment = dynamic_cast<const BroadcastLeaderFragment *>(chunk.get()))
+        {
+            return true;
         }
         return false;
     }

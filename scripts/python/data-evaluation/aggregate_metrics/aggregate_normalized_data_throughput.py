@@ -14,7 +14,7 @@ OUTPUT_DIR = os.path.join(BASE_DIR, "data_aggregated")
 
 TXT_PATTERN = re.compile(
     r"mac(?P<protocol>[A-Za-z0-9]+)-maxX(?P<maxX>[0-9]+m)-ttnm(?P<ttnm>[0-9.]+)s-"
-    r"numberNodes(?P<nodes>[0-9]+)-m(?P<mobility>[A-Za-z]+)-rep(?P<rep>[0-9]+)\.txt$"
+    r"numberNodes(?P<nodes>[0-9]+)-m(?P<mobility>[A-Za-z]+)-(?P<run>[0-9]+)\.txt$"
 )
 
 SIM_DURATION_SECONDS = 600.0
@@ -40,21 +40,26 @@ def compute_stats(values: Iterable[float]) -> Dict[str, float]:
     }
 
 
-def _read_first_value(lines: List[str], label: str) -> float:
+def _read_values_after_label(lines: List[str], label: str) -> List[float]:
+    """Return consecutive numeric values following a label line."""
     try:
         idx = lines.index(label)
     except ValueError as exc:
         raise ValueError(f"Label '{label}' missing") from exc
-    if idx + 1 >= len(lines):
-        raise ValueError(f"No value after label '{label}'")
-    try:
-        return float(lines[idx + 1])
-    except ValueError as exc:
-        raise ValueError(f"Value after '{label}' is not numeric") from exc
+
+    values: List[float] = []
+    for entry in lines[idx + 1 :]:
+        try:
+            values.append(float(entry))
+        except ValueError:
+            break
+    if not values:
+        raise ValueError(f"No numeric values after label '{label}'")
+    return values
 
 
-def parse_file(path: str) -> Tuple[Dict[str, str], float]:
-    """Parse txt file and return metadata + normalized data throughput."""
+def parse_file(path: str) -> Tuple[Dict[str, str], float, float]:
+    """Parse txt file and return metadata + normalized throughput metrics."""
     filename = os.path.basename(path)
     match = TXT_PATTERN.match(filename)
     if not match:
@@ -67,26 +72,38 @@ def parse_file(path: str) -> Tuple[Dict[str, str], float]:
 
     with open(path, "r") as handle:
         lines = [line.strip() for line in handle.readlines() if line.strip()]
-    data_bytes = _read_first_value(lines, "Effective Bytes")
+
+    bytes_received = _read_values_after_label(lines, "Bytes Received")
+    if len(bytes_received) < 2:
+        raise ValueError("Expected two values after 'Bytes Received'")
+
+    effective_bytes = bytes_received[0]
+    total_bytes = bytes_received[1]
 
     if nodes <= 1:
         raise ValueError("Number of nodes must be greater than 1")
 
-    normalized = data_bytes / (SIM_DURATION_SECONDS * (nodes - 1))
+    denom = SIM_DURATION_SECONDS * (nodes - 1)
+    normalized_total = total_bytes / denom
+    normalized_effective = effective_bytes / denom
+
     metadata = {
         "macProtocol": protocol,
         "dimensions": max_x,
         "timeToNextMission": round_half_up(60.0 / ttnm) if ttnm else 0,
         "numberNodes": nodes,
     }
-    return metadata, normalized
+    return metadata, normalized_total, normalized_effective
 
 
 def aggregate_normalized_data_throughput() -> None:
     """Aggregate normalized data throughput grouped by metadata (excluding mobility)."""
-    groups: Dict[Tuple[str, Tuple[Tuple[str, str], ...]], List[float]] = defaultdict(
-        list
-    )
+    groups_total: Dict[
+        Tuple[str, Tuple[Tuple[str, str], ...]], List[float]
+    ] = defaultdict(list)
+    groups_effective: Dict[
+        Tuple[str, Tuple[Tuple[str, str], ...]], List[float]
+    ] = defaultdict(list)
     meta_lookup: Dict[Tuple[str, Tuple[Tuple[str, str], ...]], Dict[str, str]] = {}
     protocol_dim_entries: Dict[str, Dict[str, List[Dict[str, object]]]] = defaultdict(
         lambda: defaultdict(list)
@@ -99,33 +116,45 @@ def aggregate_normalized_data_throughput() -> None:
 
             path = os.path.join(root, filename)
             try:
-                meta, value = parse_file(path)
+                meta, value_total, value_effective = parse_file(path)
             except Exception as exc:
                 print(f"Skipping {path}: {exc}")
                 continue
 
             key = (meta["macProtocol"], tuple(sorted(meta.items())))
-            groups[key].append(value)
+            groups_total[key].append(value_total)
+            groups_effective[key].append(value_effective)
             meta_lookup[key] = meta
 
-    for key, values in groups.items():
+    for key, values_total in groups_total.items():
         protocol, _ = key
-        stats = compute_stats(values)
+        stats_total = compute_stats(values_total)
+        stats_effective = compute_stats(groups_effective[key])
         metadata = dict(meta_lookup[key])
         metadata.pop("macProtocol", None)
         dim = metadata.get("dimensions", "unknown")
 
-        entry = {"metadata": metadata, "data": stats}
+        entry = {
+            "metadata": metadata,
+            "data": {
+                "normalized_data_throughput": stats_total,
+                "normalized_effective_data_throughput": stats_effective,
+            },
+        }
         protocol_dim_entries[protocol][dim].append(entry)
 
     output_dir = os.path.join(OUTPUT_DIR, "normalized-data-throughput")
+    output_dir_effective = os.path.join(
+        OUTPUT_DIR, "normalized-effective-data-throughput"
+    )
     os.makedirs(output_dir, exist_ok=True)
+    os.makedirs(output_dir_effective, exist_ok=True)
 
     for protocol, dim_map in protocol_dim_entries.items():
         protocol_lower = str(protocol).lower()
         for dim, dim_entries in dim_map.items():
             dim_safe = re.sub(r"[^A-Za-z0-9_.-]+", "-", dim)
-            payload = {
+            payload_total = {
                 "metadata": {
                     "protocol": protocol_lower,
                     "dimensions": dim,
@@ -143,13 +172,39 @@ def aggregate_normalized_data_throughput() -> None:
                     for entry in dim_entries
                 ],
             }
-            outfile = os.path.join(
+            outfile_total = os.path.join(
                 output_dir,
                 f"{protocol_lower}_{dim_safe}_normalized-data-throughput.json",
             )
-            with open(outfile, "w") as handle:
-                json.dump(payload, handle, indent=2)
-            print(f"Wrote {outfile}")
+            with open(outfile_total, "w") as handle:
+                json.dump(payload_total, handle, indent=2)
+            print(f"Wrote {outfile_total}")
+
+            payload_effective = {
+                "metadata": {
+                    "protocol": protocol_lower,
+                    "dimensions": dim,
+                    "count": len(dim_entries),
+                },
+                "data": [
+                    {
+                        "metadata": {
+                            k: v
+                            for k, v in entry["metadata"].items()
+                            if k != "dimensions"
+                        },
+                        "data": entry["data"]["normalized_effective_data_throughput"],
+                    }
+                    for entry in dim_entries
+                ],
+            }
+            outfile_effective = os.path.join(
+                output_dir_effective,
+                f"{protocol_lower}_{dim_safe}_normalized-effective-data-throughput.json",
+            )
+            with open(outfile_effective, "w") as handle:
+                json.dump(payload_effective, handle, indent=2)
+            print(f"Wrote {outfile_effective}")
 
 
 if __name__ == "__main__":

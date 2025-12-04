@@ -17,6 +17,15 @@ namespace rlora
             decapsulate(packet);
         }
 
+        if ((fsm.getState() == WAIT_CTS || fsm.getState() == READY_TO_SEND) && isDataPacket(packet))
+        {
+            handlePacket(packet);
+        }
+        if ((fsm.getState() == AWAIT_TRANSMISSION || fsm.getState() == CW_CTS) && isNotOurDataPacket(packet))
+        {
+            handlePacket(packet);
+        }
+
         if (
             (fsm.getState() == WAIT_CTS ||
              fsm.getState() == READY_TO_SEND ||
