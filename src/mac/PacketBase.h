@@ -32,6 +32,8 @@ namespace rlora
         void createNeighbourPacket(int payloadSize, int source, bool isMission);
         Packet *dequeueCustomPacket();
 
+        void logReceivedFragmentId(int id);
+
         IncompletePacketList incompleteMissionPktList;
         IncompletePacketList incompleteNeighbourPktList;
         CustomPacketQueue packetQueue;

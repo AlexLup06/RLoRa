@@ -15,6 +15,7 @@ class MessageInfoTag extends inet::TagBase
     bool hasUsefulData=false;
     bool withRTS=true;
     int missionId=-1;
+    int messageId=-1;
     int hopId=-1;
     int payloadSize=0;
     int tries=0;

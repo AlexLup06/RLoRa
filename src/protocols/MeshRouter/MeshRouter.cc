@@ -91,6 +91,7 @@ namespace rlora
     void MeshRouter::handlePacket(Packet *packet)
     {
         auto chunk = packet->peekAtFront<inet::Chunk>();
+        logEffectiveReception(packet);
 
         if (auto msg = dynamic_cast<const BroadcastRts *>(chunk.get()))
         {

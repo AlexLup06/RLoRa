@@ -135,6 +135,17 @@ namespace rlora
         DataLogger::getInstance()->logBytesSent(frameToSend->getByteLength());
     }
 
+    void MacBase::logEffectiveReception(Packet *packet)
+    {
+        Ptr<const MessageInfoTag> infoTag = packet->getTag<MessageInfoTag>();
+
+        if (infoTag->getHasUsefulData())
+        {
+            DataLogger::getInstance()->logEffectiveBytesReceived(infoTag->getPayloadSize());
+            DataLogger::getInstance()->logEffectiveReceptions();
+        }
+    }
+
     void MacBase::handleLowerPacket(Packet *msg)
     {
         handleWithFsm(msg);

@@ -2,7 +2,25 @@
 
 namespace rlora
 {
-    PacketBase::PacketBase() : incompleteMissionPktList(true), incompleteNeighbourPktList(false) {}
+    PacketBase::PacketBase() : incompleteMissionPktList(true), incompleteNeighbourPktList(false)
+    {
+        incompleteMissionPktList.setLogFragmentCallback(
+            [this](int id)
+            {
+                this->logReceivedFragmentId(id);
+            });
+
+        incompleteNeighbourPktList.setLogFragmentCallback(
+            [this](int id)
+            {
+                this->logReceivedFragmentId(id);
+            });
+    }
+
+    void PacketBase::logReceivedFragmentId(int id)
+    {
+        emit(receivedFragmentId, id);
+    }
 
     void PacketBase::finishPacketBase()
     {
@@ -130,6 +148,7 @@ namespace rlora
         messageInfoTag->setIsHeader(true);
         messageInfoTag->setHasUsefulData(true);
         messageInfoTag->setPayloadSize(currentPayloadSize);
+        messageInfoTag->setMessageId(messageId);
 
         encapsulate(headerPaket);
         packetQueue.enqueuePacket(headerPaket);
@@ -169,6 +188,7 @@ namespace rlora
             messageInfoTag->setIsHeader(false);
             messageInfoTag->setHasUsefulData(true);
             messageInfoTag->setPayloadSize(currentPayloadSize);
+            messageInfoTag->setMessageId(messageId);
 
             encapsulate(fragmentPacket);
             packetQueue.enqueuePacket(fragmentPacket);
@@ -231,6 +251,7 @@ namespace rlora
             messageInfoTag->setIsHeader(false);
             messageInfoTag->setHasUsefulData(true);
             messageInfoTag->setPayloadSize(currentPayloadSize);
+            messageInfoTag->setMessageId(messageId);
 
             if (payloadSize == 0)
             {
@@ -274,6 +295,7 @@ namespace rlora
         messageInfoTag->setIsNeighbourMsg(!isMission);
         messageInfoTag->setMissionId(missionId);
         messageInfoTag->setIsHeader(true);
+        messageInfoTag->setMessageId(headerPaket->getId());
 
         return headerPaket;
     }
@@ -301,6 +323,7 @@ namespace rlora
         messageInfoTag->setMissionId(missionId);
         messageInfoTag->setIsHeader(true);
         messageInfoTag->setWithRTS(isMission);
+        messageInfoTag->setMessageId(headerPaket->getId());
 
         return headerPaket;
     }
@@ -370,6 +393,7 @@ namespace rlora
             messageInfoTag->setPayloadSize(currentPayloadSize);
             messageInfoTag->setWithRTS(isMission);
             messageInfoTag->setHasRegularHeader(hasRegularHeader);
+            messageInfoTag->setMessageId(messageId);
 
             encapsulate(fragmentPacket);
             packetQueue.enqueuePacket(fragmentPacket);
@@ -406,6 +430,7 @@ namespace rlora
         messageInfoTag->setHasUsefulData(true);
         messageInfoTag->setPayloadSize(payloadSize);
         messageInfoTag->setWithRTS(false);
+        messageInfoTag->setMessageId(messageId);
 
         encapsulate(leaderpacket);
 

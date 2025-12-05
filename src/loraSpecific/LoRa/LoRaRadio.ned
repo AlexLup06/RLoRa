@@ -44,7 +44,7 @@ module LoRaRadio extends NarrowbandRadioBase
         @signal[symbolErrorRate];
         @signal[droppedPacket](type=long);
 
-        @statistic[receivedId](source=receivedId; record=vector; interpolationmode=none);
+        @statistic[couldHavereceivedId](source=couldHavereceivedId; record=vector; interpolationmode=none);
 
         @statistic[radioMode](title="Radio mode"; source=radioModeChanged; record=count,vector; interpolationmode=sample-hold);
         @statistic[receptionState](title="Radio reception state"; source=receptionStateChanged; record=count,vector; interpolationmode=sample-hold);

@@ -37,6 +37,8 @@ namespace rlora
 
         void retransmitPacket(Result result);
 
+        void logEffectiveReception(Packet *packet);
+
     protected:
         cMessage *moreMessagesToSend = nullptr;
 

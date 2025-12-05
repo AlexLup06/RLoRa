@@ -17,6 +17,8 @@ namespace rlora
             address.setAddress(addressString);
         }
 
+        receivedFragmentId = registerSignal("receivedFragmentId");
+
         txQueue = getQueue(gate(upperLayerInGateId));
         nodeId = intuniform(0, 16777216);
     }

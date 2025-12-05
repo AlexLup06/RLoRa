@@ -13,5 +13,7 @@ module MacContext extends MacProtocolBase like IMacProtocol
         @statistic[missionIdRtsSent](source=missionIdRtsSent; record=vector; interpolationmode=none);
         @statistic[receivedMissionId](source=receivedMissionId; record=vector; interpolationmode=none);
 
+        @statistic[receivedFragmentId](source=receivedFragmentId; record=vector; interpolationmode=none);
+
         @class(MacContext);
 }

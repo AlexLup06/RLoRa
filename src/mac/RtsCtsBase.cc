@@ -194,6 +194,7 @@ namespace rlora
 
         DataLogger::getInstance()->logTransmission();
         DataLogger::getInstance()->logBytesSent(ctsPacket->getByteLength());
+        
         delete ctsPacket;
 
         if (withRemainder)

@@ -39,7 +39,7 @@ public:
     static simsignal_t symbolErrorRateSignal;
     static simsignal_t droppedPacket;
 
-    simsignal_t receivedId;
+    simsignal_t couldHavereceivedId;
 
 public:
     /**

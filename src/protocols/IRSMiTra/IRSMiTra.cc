@@ -29,6 +29,9 @@ namespace rlora
                 FSMA_Event_Transition(we - got - rts - now-- send - cts,
                                       msg == initiateCTS && isFreeToSend(),
                                       CW_CTS, );
+                FSMA_Event_Transition(able - to - receive,
+                                      isReceiving(),
+                                      RECEIVING, );
             }
             FSMA_State(LISTENING)
             {
@@ -207,6 +210,8 @@ namespace rlora
     {
         auto chunk = packet->peekAtFront<inet::Chunk>();
         Ptr<const MessageInfoTag> infoTag = packet->getTag<MessageInfoTag>();
+
+        logEffectiveReception(packet);
 
         if (auto msg = dynamic_cast<const BroadcastRts *>(chunk.get()))
         {

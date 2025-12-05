@@ -30,6 +30,8 @@ namespace rlora
 
         LoRaRadio *loRaRadio;
 
+        simsignal_t receivedFragmentId;
+
     private:
     };
 }

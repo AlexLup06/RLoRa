@@ -74,11 +74,12 @@ namespace rlora
     {
         auto chunk = packet->peekAtFront<inet::Chunk>();
 
+        logEffectiveReception(packet);
+
         if (auto msg = dynamic_cast<const BroadcastLeaderFragment *>(chunk.get()))
             handleLeaderFragment(msg);
         else if (auto msg = dynamic_cast<const BroadcastFragment *>(chunk.get()))
             handleFragment(msg);
-
     }
 
     void Aloha::handleLeaderFragment(const BroadcastLeaderFragment *msg)

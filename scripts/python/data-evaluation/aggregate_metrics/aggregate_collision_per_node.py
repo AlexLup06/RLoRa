@@ -14,7 +14,7 @@ OUTPUT_DIR = os.path.join(BASE_DIR, "data_aggregated")
 
 TXT_PATTERN = re.compile(
     r"mac(?P<protocol>[A-Za-z0-9]+)-maxX(?P<maxX>[0-9]+m)-ttnm(?P<ttnm>[0-9.]+)s-"
-    r"numberNodes(?P<nodes>[0-9]+)-m(?P<mobility>[A-Za-z]+)-rep(?P<rep>[0-9]+)\.txt$"
+    r"numberNodes(?P<nodes>[0-9]+)-m(?P<mobility>[A-Za-z]+)-(?P<run>[0-9]+)\.txt$"
 )
 
 
@@ -38,6 +38,24 @@ def compute_stats(values: Iterable[float]) -> Dict[str, float]:
     }
 
 
+def _read_values_after_label(lines: List[str], label: str) -> List[float]:
+    """Return consecutive numeric values following a label line."""
+    try:
+        idx = lines.index(label)
+    except ValueError as exc:
+        raise ValueError(f"Label '{label}' missing") from exc
+
+    values: List[float] = []
+    for entry in lines[idx + 1 :]:
+        try:
+            values.append(float(entry))
+        except ValueError:
+            break
+    if not values:
+        raise ValueError(f"No numeric values after label '{label}'")
+    return values
+
+
 def parse_file(path: str) -> Tuple[Dict[str, str], float]:
     """Parse collisions file and return metadata + collisions-per-node."""
     filename = os.path.basename(path)
@@ -52,12 +70,10 @@ def parse_file(path: str) -> Tuple[Dict[str, str], float]:
 
     with open(path, "r") as handle:
         lines = [line.strip() for line in handle.readlines() if line.strip()]
-    if len(lines) < 3:
+    collisions_list = _read_values_after_label(lines, "Collisions")
+    if not collisions_list:
         raise ValueError("File does not contain collision data")
-    try:
-        collisions = float(lines[1])
-    except ValueError as exc:
-        raise ValueError("Collision values are not numeric") from exc
+    collisions = collisions_list[0]
 
     if nodes <= 0:
         raise ValueError("Number of nodes must be greater than zero")

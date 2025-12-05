@@ -4,12 +4,15 @@
 #include <vector>
 #include <cstdint>
 #include <sstream>
+#include <cstring>
+#include <unordered_map>
+#include <algorithm>
 
 #include "inet/common/Units.h"
 
 #include "../common/messages/BroadcastFragment_m.h"
 #include "generalHelpers.h"
-#include <unordered_map>
+
 
 namespace rlora
 {
@@ -42,6 +45,8 @@ namespace rlora
     class IncompletePacketList
     {
     public:
+        using LogFunc = std::function<void(int id)>;
+
         IncompletePacketList(bool isMissionList = false);
         virtual ~IncompletePacketList();
 
@@ -52,14 +57,17 @@ namespace rlora
         Result addToIncompletePacket(const BroadcastFragment *fragment);
 
         void updatePacketId(int sourceId, int newId);
-        bool isNewIdLower(int sourceId, int newId) const;
         bool isNewIdSame(int sourceId, int newId) const;
         bool isNewIdHigher(int sourceId, int newId) const;
+
+        void setLogFragmentCallback(LogFunc func);
 
     private:
         std::vector<FragmentedPacket> packets_;
         std::unordered_map<int, int> latestIds_;
         bool isMissionList_;
+
+        LogFunc logFragmentFunc_;
     };
 
 }
