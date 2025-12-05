@@ -31,7 +31,7 @@ namespace rlora
                                       CW_CTS, );
                 FSMA_Event_Transition(able - to - receive,
                                       isReceiving(),
-                                      RECEIVING, );
+                                      RECEIVING, cancelEvent(shortWait));
             }
             FSMA_State(LISTENING)
             {
