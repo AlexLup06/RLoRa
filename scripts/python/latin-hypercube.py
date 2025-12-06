@@ -11,7 +11,7 @@ robot_range = [10, 100]  # node count
 ttnm_choices = [round(0.1 * i, 1) for i in range(1, 10)] + list(range(1, 121))
 
 # LHS setup
-n_samples = 9
+n_samples = 400
 seed = 45
 sampler = qmc.LatinHypercube(d=2, seed=seed)
 lhs_samples = sampler.random(n=n_samples)
