@@ -18,7 +18,7 @@ TIME_ON_AIR_PATTERN = re.compile(r"^timeOnAir-.*\.json$")
 
 
 def normalize_metadata(itervars: Dict[str, str]) -> Dict[str, str]:
-    """Prepare metadata: drop mobility, combine dimensions, convert ttnm to Hz."""
+    """Prepare metadata: drop mobility, combine dimensions, keep ttnm as seconds."""
     meta: Dict[str, str] = {
         k: v
         for k, v in itervars.items()
@@ -37,8 +37,7 @@ def normalize_metadata(itervars: Dict[str, str]) -> Dict[str, str]:
     ttnm_raw = itervars.get("ttnm")
     if ttnm_raw is not None:
         seconds = parse_seconds(ttnm_raw)
-        hz = round_half_up(60.0 / seconds) if seconds else 0
-        meta["timeToNextMission"] = hz
+        meta["timeToNextMission"] = seconds
 
     if "numberNodes" in meta:
         try:

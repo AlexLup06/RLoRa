@@ -53,7 +53,7 @@ def normalize_metadata(meta: Dict[str, str]) -> Dict[str, object]:
             normalized["dimensions"] = str(val)
         elif key == "ttnm":
             seconds = parse_seconds(val)
-            normalized["timeToNextMission"] = round_half_up(60.0 / seconds) if seconds else 0
+            normalized["timeToNextMission"] = seconds
         elif key == "numberNodes":
             try:
                 normalized[key] = int(val)

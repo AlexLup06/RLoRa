@@ -108,7 +108,6 @@ def modify_received_id(exp):
         exp["vectors"] = []
         return
 
-    # Track which nodes could have received each mission ID, and which actually received fragments
     possible: Dict[int, set] = {}
     received: Dict[int, set] = {}
 
@@ -129,64 +128,18 @@ def modify_received_id(exp):
             mid = abs(int(val))
 
             if "couldhavereceivedid:vector" in name_lower:
-                # Any appearance means this node could have received this mission ID
                 possible.setdefault(mid, set()).add(node)
             elif "receivedfragmentid:vector" in name_lower:
-                # Any appearance means this node actually received a fragment for this mission ID
                 received.setdefault(mid, set()).add(node)
-
-    direct_overlap = set(possible.keys()) & set(received.keys())
-    minus1_overlap = set(mid for mid in possible if (mid - 1) in received)
-    plus1_overlap = set(mid for mid in possible if (mid + 1) in received)
-
-    sample_debug = []
-    for mid in sorted(list(direct_overlap))[:3]:
-        sample_debug.append(
-            (mid, len(possible[mid]), len(received.get(mid, set())), "direct")
-        )
-    for mid in sorted(list(minus1_overlap - direct_overlap))[:2]:
-        sample_debug.append(
-            (
-                mid,
-                len(possible[mid]),
-                len(received.get(mid - 1, set())),
-                "mid-1",
-            )
-        )
-    for mid in sorted(list(plus1_overlap - direct_overlap))[:2]:
-        sample_debug.append(
-            (
-                mid,
-                len(possible[mid]),
-                len(received.get(mid + 1, set())),
-                "mid+1",
-            )
-        )
-
-    print(
-        "[debug] couldHavereceivedId missions: "
-        f"{len(possible)}; receivedFragmentId missions: {len(received)}; "
-        f"direct overlap: {len(direct_overlap)}; "
-        f"mid-1 overlap: {len(minus1_overlap)}; "
-        f"mid+1 overlap: {len(plus1_overlap)}; "
-        f"sample overlap counts={sample_debug}"
-    )
 
     ratios: List[float] = []
     for mid, nodes_possible in possible.items():
         denom = len(nodes_possible)
         if denom == 0:
             continue
-        rec_nodes = received.get(mid)
-        if rec_nodes is None:
-            rec_nodes = received.get(mid - 1)
-        if rec_nodes is None:
-            rec_nodes = received.get(mid + 1)
-        num = len(rec_nodes) if rec_nodes is not None else 0
-        # Ratio of nodes that actually received vs. nodes that could have received
+        rec_nodes = received.get(mid, set())
+        num = len(rec_nodes)
         ratios.append(num / denom)
-
-    print(f"[debug] computed ratios: count={len(ratios)}, sample={ratios[:5]}")
 
     if not ratios:
         exp["vectors"] = []

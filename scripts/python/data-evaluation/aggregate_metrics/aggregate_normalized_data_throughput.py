@@ -90,7 +90,7 @@ def parse_file(path: str) -> Tuple[Dict[str, str], float, float]:
     metadata = {
         "macProtocol": protocol,
         "dimensions": max_x,
-        "timeToNextMission": round_half_up(60.0 / ttnm) if ttnm else 0,
+        "timeToNextMission": ttnm,
         "numberNodes": nodes,
     }
     return metadata, normalized_total, normalized_effective
