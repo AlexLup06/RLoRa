@@ -25,15 +25,16 @@ namespace rlora
             isRTS(packet))
         {
             handleUnhandeledRTS();
+            delete packet;
+            return;
         }
 
         if (fsm.getState() == RECEIVING && endOngoingMsg->isScheduled() && isRTS(packet))
         {
-            double maxTransmissionTime = predictOngoingMsgTime(MAXIMUM_PACKET_SIZE);
-            double maxCtsCWTime = cwCTS * ctsFS.dbl();
-            double scheduleTime = maxTransmissionTime + maxCtsCWTime + sifs.dbl();
-
-            scheduleOrExtend(this, endOngoingMsg, scheduleTime);
+            handleUnhandeledRTS();
+            delete packet;
+            fsm.setState(LISTENING);
+            return;
         }
 
         FSMA_Switch(fsm)
