@@ -12,7 +12,7 @@ namespace rlora
     {
     public:
     protected:
-        simtime_t sifs = 0.002;
+        simtime_t sifs = 0.003;
 
         int cwBackoff = 16;
         simtime_t backoffFS = 0.019 + 0.003;
