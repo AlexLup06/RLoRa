@@ -239,12 +239,7 @@ namespace rlora
             int missionId = msg->getMissionId();
             bool isMissionMsg = msg->isMission();
 
-            if (!isMissionMsg && !incompleteNeighbourPktList.isNewIdHigher(source, messageId))
-            {
-                return;
-            }
-
-            if (isMissionMsg && !incompleteMissionPktList.isNewIdHigher(source, missionId))
+            if (!shouldHandleRTS(isMissionMsg, source, messageId, missionId))
             {
                 return;
             }

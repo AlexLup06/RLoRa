@@ -150,4 +150,24 @@ namespace rlora
     {
         handleWithFsm(msg);
     }
+
+    bool MacBase::shouldHandleRTS(bool isMission, int source, int messageId, int missionId)
+    {
+        if (source == nodeId)
+        {
+            return false;
+        }
+
+        if (!isMission && !incompleteNeighbourPktList.isNewIdHigher(source, messageId))
+        {
+            return false;
+        }
+
+        if (isMission && !incompleteMissionPktList.isNewIdHigher(source, missionId))
+        {
+            return false;
+        }
+
+        return true;
+    }
 }

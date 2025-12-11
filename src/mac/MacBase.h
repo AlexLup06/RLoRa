@@ -39,6 +39,8 @@ namespace rlora
 
         void logEffectiveReception(Packet *packet);
 
+        bool shouldHandleRTS(bool isMission, int source, int messageId, int missionId);
+
     protected:
         cMessage *moreMessagesToSend = nullptr;
 

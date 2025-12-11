@@ -149,4 +149,14 @@ namespace rlora
         return newId > it->second;
     }
 
-} 
+    bool IncompletePacketList::isNewIdLower(int sourceId, int newId) const
+    {
+        auto it = latestIds_.find(sourceId);
+        if (it == latestIds_.end())
+        {
+            return false; // No messageId yet, so it's considered "larger"
+        }
+        return newId < it->second;
+    }
+
+}

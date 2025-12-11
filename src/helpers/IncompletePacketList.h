@@ -59,6 +59,7 @@ namespace rlora
         void updatePacketId(int sourceId, int newId);
         bool isNewIdSame(int sourceId, int newId) const;
         bool isNewIdHigher(int sourceId, int newId) const;
+        bool isNewIdLower(int sourceId, int newId) const;
 
         void setLogFragmentCallback(LogFunc func);
 
