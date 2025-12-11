@@ -17,7 +17,7 @@ for file in $SOURCE_DIR*.vec; do
         mobility="${BASH_REMATCH[5]}"
         rep="${BASH_REMATCH[6]}"
 
-        [[ "$range" != "1000m" && "$protocol" != "RSMiTraNR" ]] && continue
+        # [[ "$range" != "1000m" && "$protocol" != "RSMiTraNR" ]] && continue
 
         val=$(( $(date +%s) * 100 + rep ))
         
@@ -43,7 +43,7 @@ for file in ${SOURCE_DIR}*.txt; do
         rep="${BASH_REMATCH[6]}"
         val=$(( $(date +%s) * 100 + rep ))
 
-        [[ "$range" != "1000m" && "$protocol" != "RSMiTraNR" ]] && continue
+        # [[ "$range" != "1000m" && "$protocol" != "RSMiTraNR" ]] && continue
 
         
         DEST_DIR="$rlora_root/data/${protocol}/${range}/mac${protocol}-maxX${range}-ttnm${interval}-numberNodes${nodes}-m${mobility}-${val}.txt"
