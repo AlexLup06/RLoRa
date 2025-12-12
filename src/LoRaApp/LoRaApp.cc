@@ -48,13 +48,32 @@ namespace rlora
             if (msg == sendTrajectory)
             {
                 sendMessageDown(false);
-                scheduleAt(simTime() + timeToNextTrajectory, sendTrajectory);
+                simtime_t delta = normal(0, timeToNextTrajectory / 10);
+                if (delta < -timeToNextTrajectory / 10)
+                {
+                    delta = -timeToNextTrajectory / 10;
+                }
+                if (delta > timeToNextTrajectory / 10)
+                {
+                    delta = timeToNextTrajectory / 10;
+                }
+
+                scheduleAt(simTime() + timeToNextTrajectory + delta, sendTrajectory);
             }
 
             if (msg == sendMission)
             {
                 sendMessageDown(true);
-                scheduleAt(simTime() + normal(timeToNextMission, 0.1), sendMission);
+                simtime_t delta = normal(0, timeToNextMission / 10);
+                if (delta < -timeToNextTrajectory / 10)
+                {
+                    delta = -timeToNextTrajectory / 10;
+                }
+                if (delta > timeToNextTrajectory / 10)
+                {
+                    delta = timeToNextTrajectory / 10;
+                }
+                scheduleAt(simTime() + timeToNextMission + delta, sendMission);
             }
         }
         else
