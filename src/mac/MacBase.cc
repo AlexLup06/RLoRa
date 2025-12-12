@@ -60,7 +60,7 @@ namespace rlora
     void MacBase::handleUpperPacket(Packet *packet)
     {
 
-        if (packetQueue.size() > 1000)
+        if (packetQueue.size() > 4000)
         {
             delete packet;
             return;
@@ -111,7 +111,7 @@ namespace rlora
                 }
 
                 emit(receivedMissionId, result.completePacket.missionId);
-                if (packetQueue.size() < 1000)
+                if (packetQueue.size() < 4000)
                 {
                     createPacket(result.completePacket.size, result.completePacket.missionId, result.completePacket.sourceNode, result.completePacket.isMission);
                 }
