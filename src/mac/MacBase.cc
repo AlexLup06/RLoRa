@@ -59,6 +59,13 @@ namespace rlora
 
     void MacBase::handleUpperPacket(Packet *packet)
     {
+
+        if (packetQueue.size() > 1000)
+        {
+            delete packet;
+            return;
+        }
+
         const auto &payload = packet->peekAtFront<LoRaRobotPacket>();
         bool isMission = payload->isMission();
         int missionId = -2;
@@ -104,7 +111,10 @@ namespace rlora
                 }
 
                 emit(receivedMissionId, result.completePacket.missionId);
-                createPacket(result.completePacket.size, result.completePacket.missionId, result.completePacket.sourceNode, result.completePacket.isMission);
+                if (packetQueue.size() < 1000)
+                {
+                    createPacket(result.completePacket.size, result.completePacket.missionId, result.completePacket.sourceNode, result.completePacket.isMission);
+                }
             }
 
             removePacketById(result.completePacket.missionId, result.completePacket.messageId, result.isMission);

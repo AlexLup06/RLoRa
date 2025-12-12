@@ -7,6 +7,11 @@ from collections import defaultdict
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Dict, Iterable, List, Tuple
 
+try:
+    from .data_paths import iter_matching_files
+except ImportError:  # pragma: no cover - fallback for direct execution
+    from data_paths import iter_matching_files
+
 # Root directories (fall back to CWD if env var is not set)
 BASE_DIR = os.getenv("rlora_root") or os.getcwd()
 DATA_DIR = os.path.join(BASE_DIR, "data")
@@ -98,50 +103,90 @@ def parse_file(path: str) -> Tuple[Dict[str, str], float, float]:
 
 def aggregate_normalized_data_throughput() -> None:
     """Aggregate normalized data throughput grouped by metadata (excluding mobility)."""
-    groups_total: Dict[
-        Tuple[str, Tuple[Tuple[str, str], ...]], List[float]
-    ] = defaultdict(list)
-    groups_effective: Dict[
-        Tuple[str, Tuple[Tuple[str, str], ...]], List[float]
-    ] = defaultdict(list)
-    meta_lookup: Dict[Tuple[str, Tuple[Tuple[str, str], ...]], Dict[str, str]] = {}
-    protocol_dim_entries: Dict[str, Dict[str, List[Dict[str, object]]]] = defaultdict(
-        lambda: defaultdict(list)
-    )
 
-    for root, _, files in os.walk(DATA_DIR):
-        for filename in files:
-            if not TXT_PATTERN.match(filename):
-                continue
+    def flush_dimension(
+        protocol: str,
+        dimension: str,
+        groups_total: Dict[
+            Tuple[str, Tuple[Tuple[str, str], ...]], List[float]
+        ],
+        groups_effective: Dict[
+            Tuple[str, Tuple[Tuple[str, str], ...]], List[float]
+        ],
+        meta_lookup: Dict[Tuple[str, Tuple[Tuple[str, str], ...]], Dict[str, str]],
+        output_dir: str,
+        output_dir_effective: str,
+    ) -> None:
+        if not groups_total:
+            return
 
-            path = os.path.join(root, filename)
-            try:
-                meta, value_total, value_effective = parse_file(path)
-            except Exception as exc:
-                print(f"Skipping {path}: {exc}")
-                continue
+        protocol_lower = str(protocol).lower()
+        dim_entries: List[Dict[str, object]] = []
+        for key, values_total in groups_total.items():
+            stats_total = compute_stats(values_total)
+            stats_effective = compute_stats(groups_effective[key])
+            metadata = dict(meta_lookup[key])
+            metadata.pop("macProtocol", None)
+            dim_entries.append(
+                {
+                    "metadata": metadata,
+                    "data": {
+                        "normalized_data_throughput": stats_total,
+                        "normalized_effective_data_throughput": stats_effective,
+                    },
+                }
+            )
 
-            key = (meta["macProtocol"], tuple(sorted(meta.items())))
-            groups_total[key].append(value_total)
-            groups_effective[key].append(value_effective)
-            meta_lookup[key] = meta
+        if not dim_entries:
+            return
 
-    for key, values_total in groups_total.items():
-        protocol, _ = key
-        stats_total = compute_stats(values_total)
-        stats_effective = compute_stats(groups_effective[key])
-        metadata = dict(meta_lookup[key])
-        metadata.pop("macProtocol", None)
-        dim = metadata.get("dimensions", "unknown")
-
-        entry = {
-            "metadata": metadata,
-            "data": {
-                "normalized_data_throughput": stats_total,
-                "normalized_effective_data_throughput": stats_effective,
+        dim_safe = re.sub(r"[^A-Za-z0-9_.-]+", "-", str(dimension))
+        payload_total = {
+            "metadata": {
+                "protocol": protocol_lower,
+                "dimensions": dimension,
+                "count": len(dim_entries),
             },
+            "data": [
+                {
+                    **entry,
+                    "metadata": {
+                        k: v for k, v in entry["metadata"].items() if k != "dimensions"
+                    },
+                }
+                for entry in dim_entries
+            ],
         }
-        protocol_dim_entries[protocol][dim].append(entry)
+        outfile_total = os.path.join(
+            output_dir, f"{protocol_lower}_{dim_safe}_normalized-data-throughput.json"
+        )
+        with open(outfile_total, "w") as handle:
+            json.dump(payload_total, handle, indent=2)
+        print(f"Wrote {outfile_total}")
+
+        payload_effective = {
+            "metadata": {
+                "protocol": protocol_lower,
+                "dimensions": dimension,
+                "count": len(dim_entries),
+            },
+            "data": [
+                {
+                    "metadata": {
+                        k: v for k, v in entry["metadata"].items() if k != "dimensions"
+                    },
+                    "data": entry["data"]["normalized_effective_data_throughput"],
+                }
+                for entry in dim_entries
+            ],
+        }
+        outfile_effective = os.path.join(
+            output_dir_effective,
+            f"{protocol_lower}_{dim_safe}_normalized-effective-data-throughput.json",
+        )
+        with open(outfile_effective, "w") as handle:
+            json.dump(payload_effective, handle, indent=2)
+        print(f"Wrote {outfile_effective}")
 
     output_dir = os.path.join(OUTPUT_DIR, "normalized-data-throughput")
     output_dir_effective = os.path.join(
@@ -150,61 +195,40 @@ def aggregate_normalized_data_throughput() -> None:
     os.makedirs(output_dir, exist_ok=True)
     os.makedirs(output_dir_effective, exist_ok=True)
 
-    for protocol, dim_map in protocol_dim_entries.items():
-        protocol_lower = str(protocol).lower()
-        for dim, dim_entries in dim_map.items():
-            dim_safe = re.sub(r"[^A-Za-z0-9_.-]+", "-", dim)
-            payload_total = {
-                "metadata": {
-                    "protocol": protocol_lower,
-                    "dimensions": dim,
-                    "count": len(dim_entries),
-                },
-                "data": [
-                    {
-                        **entry,
-                        "metadata": {
-                            k: v
-                            for k, v in entry["metadata"].items()
-                            if k != "dimensions"
-                        },
-                    }
-                    for entry in dim_entries
-                ],
-            }
-            outfile_total = os.path.join(
-                output_dir,
-                f"{protocol_lower}_{dim_safe}_normalized-data-throughput.json",
-            )
-            with open(outfile_total, "w") as handle:
-                json.dump(payload_total, handle, indent=2)
-            print(f"Wrote {outfile_total}")
+    groups_total: Dict[
+        Tuple[str, Tuple[Tuple[str, str], ...]], List[float]
+    ] = defaultdict(list)
+    groups_effective: Dict[
+        Tuple[str, Tuple[Tuple[str, str], ...]], List[float]
+    ] = defaultdict(list)
+    meta_lookup: Dict[Tuple[str, Tuple[Tuple[str, str], ...]], Dict[str, str]] = {}
 
-            payload_effective = {
-                "metadata": {
-                    "protocol": protocol_lower,
-                    "dimensions": dim,
-                    "count": len(dim_entries),
-                },
-                "data": [
-                    {
-                        "metadata": {
-                            k: v
-                            for k, v in entry["metadata"].items()
-                            if k != "dimensions"
-                        },
-                        "data": entry["data"]["normalized_effective_data_throughput"],
-                    }
-                    for entry in dim_entries
-                ],
-            }
-            outfile_effective = os.path.join(
+    for protocol, dimension, path in iter_matching_files(DATA_DIR, TXT_PATTERN):
+        if path is None:
+            flush_dimension(
+                protocol,
+                dimension,
+                groups_total,
+                groups_effective,
+                meta_lookup,
+                output_dir,
                 output_dir_effective,
-                f"{protocol_lower}_{dim_safe}_normalized-effective-data-throughput.json",
             )
-            with open(outfile_effective, "w") as handle:
-                json.dump(payload_effective, handle, indent=2)
-            print(f"Wrote {outfile_effective}")
+            groups_total.clear()
+            groups_effective.clear()
+            meta_lookup.clear()
+            continue
+
+        try:
+            meta, value_total, value_effective = parse_file(path)
+        except Exception as exc:
+            print(f"Skipping {path}: {exc}")
+            continue
+
+        key = (meta["macProtocol"], tuple(sorted(meta.items())))
+        groups_total[key].append(value_total)
+        groups_effective[key].append(value_effective)
+        meta_lookup[key] = meta
 
 
 if __name__ == "__main__":

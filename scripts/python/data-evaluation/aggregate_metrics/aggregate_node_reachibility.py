@@ -7,6 +7,11 @@ from collections import defaultdict
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Dict, Iterable, List, Tuple
 
+try:
+    from .data_paths import iter_matching_files
+except ImportError:  # pragma: no cover - fallback for direct execution
+    from data_paths import iter_matching_files
+
 # Root directories (fall back to CWD if env var is not set)
 BASE_DIR = os.getenv("rlora_root") or os.getcwd()
 DATA_DIR = os.path.join(BASE_DIR, "data")
@@ -85,71 +90,79 @@ def read_receiver_ratio_mean(path: str) -> Tuple[Dict[str, object], float]:
 
 def aggregate_node_reachibility() -> None:
     """Aggregate node reachibility grouped by metadata (excluding mobility)."""
-    groups: Dict[Tuple[str, Tuple[Tuple[str, object], ...]], List[float]] = defaultdict(
-        list
-    )
-    meta_lookup: Dict[Tuple[str, Tuple[Tuple[str, object], ...]], Dict[str, object]] = {}
-    protocol_dim_entries: Dict[str, Dict[str, List[Dict[str, object]]]] = defaultdict(
-        lambda: defaultdict(list)
-    )
+    def flush_dimension(
+        protocol: str,
+        dimension: str,
+        groups: Dict[Tuple[str, Tuple[Tuple[str, object], ...]], List[float]],
+        meta_lookup: Dict[
+            Tuple[str, Tuple[Tuple[str, object], ...]], Dict[str, object]
+        ],
+        output_dir: str,
+    ) -> None:
+        if not groups:
+            return
 
-    for root, _, files in os.walk(DATA_DIR):
-        for filename in files:
-            if not MISSION_PATTERN.match(filename):
-                continue
+        protocol_lower = str(protocol).lower()
+        dim_entries: List[Dict[str, object]] = []
+        for key, values in groups.items():
+            stats = compute_stats(values)
+            metadata = dict(meta_lookup[key])
+            metadata.pop("macProtocol", None)
+            dim_entries.append({"metadata": metadata, "data": stats})
 
-            path = os.path.join(root, filename)
-            try:
-                meta, value = read_receiver_ratio_mean(path)
-            except Exception as exc:
-                print(f"Skipping {path}: {exc}")
-                continue
+        if not dim_entries:
+            return
 
-            protocol = str(meta.get("macProtocol", "unknown"))
-            key_meta = dict(meta)
-            key = (protocol, tuple(sorted(key_meta.items())))
-            groups[key].append(value)
-            meta_lookup[key] = key_meta
-
-    for key, values in groups.items():
-        protocol, _ = key
-        stats = compute_stats(values)
-        metadata = dict(meta_lookup[key])
-        metadata.pop("macProtocol", None)
-        dim = metadata.get("dimensions", "unknown")
-
-        entry = {"metadata": metadata, "data": stats}
-        protocol_dim_entries[protocol][dim].append(entry)
+        dim_safe = re.sub(r"[^A-Za-z0-9_.-]+", "-", str(dimension))
+        payload = {
+            "metadata": {
+                "protocol": protocol_lower,
+                "dimensions": dimension,
+                "count": len(dim_entries),
+            },
+            "data": [
+                {
+                    **entry,
+                    "metadata": {
+                        k: v for k, v in entry["metadata"].items() if k != "dimensions"
+                    },
+                }
+                for entry in dim_entries
+            ],
+        }
+        outfile = os.path.join(
+            output_dir, f"{protocol_lower}_{dim_safe}_node-reachibility.json"
+        )
+        with open(outfile, "w") as handle:
+            json.dump(payload, handle, indent=2)
+        print(f"Wrote {outfile}")
 
     output_dir = os.path.join(OUTPUT_DIR, "node-reachibility")
     os.makedirs(output_dir, exist_ok=True)
 
-    for protocol, dim_map in protocol_dim_entries.items():
-        protocol_lower = str(protocol).lower()
-        for dim, dim_entries in dim_map.items():
-            dim_safe = re.sub(r"[^A-Za-z0-9_.-]+", "-", str(dim))
-            payload = {
-                "metadata": {
-                    "protocol": protocol_lower,
-                    "dimensions": dim,
-                    "count": len(dim_entries),
-                },
-                "data": [
-                    {
-                        **entry,
-                        "metadata": {
-                            k: v for k, v in entry["metadata"].items() if k != "dimensions"
-                        },
-                    }
-                    for entry in dim_entries
-                ],
-            }
-            outfile = os.path.join(
-                output_dir, f"{protocol_lower}_{dim_safe}_node-reachibility.json"
-            )
-            with open(outfile, "w") as handle:
-                json.dump(payload, handle, indent=2)
-            print(f"Wrote {outfile}")
+    groups: Dict[Tuple[str, Tuple[Tuple[str, object], ...]], List[float]] = defaultdict(
+        list
+    )
+    meta_lookup: Dict[Tuple[str, Tuple[Tuple[str, object], ...]], Dict[str, object]] = {}
+
+    for protocol, dimension, path in iter_matching_files(DATA_DIR, MISSION_PATTERN):
+        if path is None:
+            flush_dimension(protocol, dimension, groups, meta_lookup, output_dir)
+            groups.clear()
+            meta_lookup.clear()
+            continue
+
+        try:
+            meta, value = read_receiver_ratio_mean(path)
+        except Exception as exc:
+            print(f"Skipping {path}: {exc}")
+            continue
+
+        protocol_name = str(meta.get("macProtocol", "unknown"))
+        key_meta = dict(meta)
+        key = (protocol_name, tuple(sorted(key_meta.items())))
+        groups[key].append(value)
+        meta_lookup[key] = key_meta
 
 
 if __name__ == "__main__":
