@@ -9,16 +9,14 @@ from typing import Dict, Iterable, List, Tuple
 
 try:
     from .data_paths import iter_matching_files
-except ImportError:  # pragma: no cover - fallback for direct execution
+except ImportError:
     from data_paths import iter_matching_files
 
 
-# Root directories (fall back to CWD if env var is not set)
 BASE_DIR = os.getenv("rlora_root") or os.getcwd()
 DATA_DIR = os.path.join(BASE_DIR, "data")
 OUTPUT_DIR = os.path.join(BASE_DIR, "data_aggregated")
 
-# Only aggregate this metric for now
 TIME_ON_AIR_PATTERN = re.compile(r"^timeOnAir-.*\.json$")
 
 
@@ -183,9 +181,9 @@ def aggregate_time_on_air() -> None:
     output_dir = os.path.join(OUTPUT_DIR, "time-on-air")
     os.makedirs(output_dir, exist_ok=True)
 
-    groups: Dict[
-        Tuple[str, Tuple[Tuple[str, str], ...]], List[float]
-    ] = defaultdict(list)
+    groups: Dict[Tuple[str, Tuple[Tuple[str, str], ...]], List[float]] = defaultdict(
+        list
+    )
     meta_lookup: Dict[Tuple[str, Tuple[Tuple[str, str], ...]], Dict[str, str]] = {}
 
     for protocol, dimension, path in iter_matching_files(DATA_DIR, TIME_ON_AIR_PATTERN):

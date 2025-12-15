@@ -5,14 +5,12 @@ from typing import Dict, Iterable, List, Tuple
 
 try:
     from aggregate_metrics.data_paths import iter_matching_files, selected_dimensions, selected_protocols
-except ImportError:  # pragma: no cover - fallback for direct execution
+except ImportError: 
     from data_paths import iter_matching_files, selected_dimensions, selected_protocols  # type: ignore
 
-# Root directories (fall back to CWD if env var is not set)
 BASE_DIR = os.getenv("rlora_root") or os.getcwd()
 DATA_DIR = os.path.join(BASE_DIR, "data")
 
-# Parameter grid from simulations/dynamicParams.ini
 TTNM_VALUES = [
     "0.1s",
     "0.2s",
@@ -63,7 +61,6 @@ NUMBER_NODE_VALUES = [
     100,
 ]
 
-# Accept any filename containing ttnmXs-numberNodesY
 FILENAME_PATTERN = re.compile(
     r"ttnm(?P<ttnm>[0-9.]+)s.*numberNodes(?P<nodes>[0-9]+)", re.IGNORECASE
 )
@@ -116,7 +113,6 @@ def scan() -> None:
         DATA_DIR, re.compile(r".*"), protocols=protocols, dimensions=dimensions
     ):
         if path is None:
-            # Finished this subdir
             if current_proto is not None and current_dim is not None:
                 print(f"\n=== {current_proto}/{current_dim} ===")
                 counts = _count_pairs(current_paths)

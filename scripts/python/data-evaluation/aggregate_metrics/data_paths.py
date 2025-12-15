@@ -55,19 +55,12 @@ def iter_matching_files(
             if not os.path.isdir(base_dir):
                 continue
             scanned_here = 0
-            print(f"Scanning {protocol}/{dimension} ...")
             for root, _, files in os.walk(base_dir):
                 for filename in files:
                     scanned_here += 1
                     total_scanned += 1
-                    if scanned_here % 1000 == 0:
-                        print(
-                            f"[{protocol}/{dimension}] scanned {scanned_here} files "
-                            f"(total {total_scanned})"
-                        )
                     if pattern.match(filename):
                         yield (protocol, dimension, os.path.join(root, filename))
-            print(f"{protocol}/{dimension}: {scanned_here} files scanned")
             yield (protocol, dimension, None)
 
 

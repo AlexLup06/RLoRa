@@ -9,10 +9,9 @@ from typing import Dict, Iterable, List, Tuple
 
 try:
     from .data_paths import iter_matching_files
-except ImportError:  # pragma: no cover - fallback for direct execution
+except ImportError: 
     from data_paths import iter_matching_files
 
-# Root directories (fall back to CWD if env var is not set)
 BASE_DIR = os.getenv("rlora_root") or os.getcwd()
 DATA_DIR = os.path.join(BASE_DIR, "data")
 OUTPUT_DIR = os.path.join(BASE_DIR, "data_aggregated")
@@ -131,13 +130,13 @@ def aggregate_node_reachibility() -> None:
             ],
         }
         outfile = os.path.join(
-            output_dir, f"{protocol_lower}_{dim_safe}_node-reachibility.json"
+            output_dir, f"{protocol_lower}_{dim_safe}_node-reachability.json"
         )
         with open(outfile, "w") as handle:
             json.dump(payload, handle, indent=2)
         print(f"Wrote {outfile}")
 
-    output_dir = os.path.join(OUTPUT_DIR, "node-reachibility")
+    output_dir = os.path.join(OUTPUT_DIR, "node-reachability")
     os.makedirs(output_dir, exist_ok=True)
 
     groups: Dict[Tuple[str, Tuple[Tuple[str, object], ...]], List[float]] = defaultdict(

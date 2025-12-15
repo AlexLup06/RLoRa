@@ -8,12 +8,11 @@ import math
 from typing import Dict, List
 from scipy import stats
 
-m.patch()  # allow numpy + float encoding
+m.patch() 
 
-# Root directory
 root_dir = os.path.join(os.getenv("rlora_root"), "data")
 
-SAVE_AS_MSGPACK = False  # set False if you want normal JSON output again
+SAVE_AS_MSGPACK = False
 
 def process_json_file(root, filename, modify_func):
     filepath = os.path.join(root, filename)

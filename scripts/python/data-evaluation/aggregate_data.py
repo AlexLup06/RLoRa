@@ -1,4 +1,5 @@
-from typing import Callable, List, Tuple
+import sys
+from typing import Callable, Dict, List, Tuple
 
 from aggregate_metrics import (
     aggregate_collision_per_node,
@@ -17,6 +18,35 @@ def run_all(aggregators: List[Aggregator]) -> None:
     for name, func in aggregators:
         print(f"== Aggregating {name} ==")
         func()
+
+
+def select_aggregators(
+    all_aggs: List[Aggregator], requested: List[str]
+) -> List[Aggregator]:
+    """Filter aggregators by requested names (case-insensitive)."""
+    if not requested:
+        return all_aggs
+
+    lookup: Dict[str, Aggregator] = {
+        name.lower(): (name, func) for name, func in all_aggs
+    }
+    selected: List[Aggregator] = []
+    missing: List[str] = []
+
+    for item in requested:
+        key = item.lower()
+        if key in lookup:
+            selected.append(lookup[key])
+        else:
+            missing.append(item)
+
+    if missing:
+        available = ", ".join(sorted(lookup.keys()))
+        print(f"Unknown aggregator(s): {', '.join(missing)}")
+        print(f"Available aggregators: {available}")
+        sys.exit(1)
+
+    return selected
 
 
 if __name__ == "__main__":
@@ -40,4 +70,5 @@ if __name__ == "__main__":
             aggregate_node_reachibility.aggregate_node_reachibility,
         ),
     ]
-    run_all(AGGREGATORS)
+    requested = sys.argv[1:]
+    run_all(select_aggregators(AGGREGATORS, requested))
