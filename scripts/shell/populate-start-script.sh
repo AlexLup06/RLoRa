@@ -9,8 +9,8 @@ OUTFILE2=start-2.sh
 
 # Range parameters
 STEP=500
-END=243200   # we stop at 153600
-START=0
+END=256000   # we stop at 153600
+START=243200
 
 while [ $START -lt $END ]; do
     STOP=$((START + STEP - 1))
@@ -28,7 +28,7 @@ done
 chmod +x $OUTFILE1
 echo "Generated $OUTFILE1"
 
-START=0
+START=243200
 while [ $START -lt $END ]; do
     STOP=$((START + STEP - 1))
 
