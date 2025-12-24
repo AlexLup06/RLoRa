@@ -87,8 +87,8 @@ def read_receiver_ratio_mean(path: str) -> Tuple[Dict[str, object], float]:
     return meta, value
 
 
-def aggregate_node_reachibility() -> None:
-    """Aggregate node reachibility grouped by metadata (excluding mobility)."""
+def aggregate_node_reachability() -> None:
+    """Aggregate node reachability grouped by metadata (excluding mobility)."""
     def flush_dimension(
         protocol: str,
         dimension: str,
@@ -165,4 +165,4 @@ def aggregate_node_reachibility() -> None:
 
 
 if __name__ == "__main__":
-    aggregate_node_reachibility()
+    aggregate_node_reachability()

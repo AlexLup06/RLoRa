@@ -4,7 +4,7 @@ from typing import Callable, Dict, List, Tuple
 from aggregate_metrics import (
     aggregate_collision_per_node,
     aggregate_mac_efficiency,
-    aggregate_node_reachibility,
+    aggregate_node_reachability,
     aggregate_normalized_data_throughput,
     aggregate_reception_success_ratio,
     aggregate_time_on_air,
@@ -66,8 +66,8 @@ if __name__ == "__main__":
             aggregate_reception_success_ratio.aggregate_reception_success_ratio,
         ),
         (
-            "nodeReachibility",
-            aggregate_node_reachibility.aggregate_node_reachibility,
+            "nodeReachability",
+            aggregate_node_reachability.aggregate_node_reachability,
         ),
     ]
     requested = sys.argv[1:]
