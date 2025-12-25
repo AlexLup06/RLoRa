@@ -112,56 +112,6 @@ void CustomPacketQueue::enqueuePacketAtPosition(Packet *pkt, int pos)
     packetQueue.insert(it, pkt);
 }
 
-// enqueue NodeAnnounce Packet always in the front. If there is already a NodeAnnounce Packet there, then do nothing. If the first
-// packet is not a header, then enqueue in front of the next header. Otherwise we will disrupt package transmission
-void CustomPacketQueue::enqueueNodeAnnounce(Packet *pkt)
-{
-    // 1. Check if a NodeAnnounce already exists
-    for (auto existingPkt : packetQueue) {
-        auto existingTag = existingPkt->getTag<MessageInfoTag>();
-        if (existingTag->isNodeAnnounce()) {
-            EV << "NodeAnnounce already in queue -> dropping new one" << endl;
-            delete pkt; // or handle accordingly
-            return;
-        }
-    }
-
-    // 2. If queue is empty -> just push to front
-    if (packetQueue.empty()) {
-        EV << "Queue empty -> pushing NodeAnnounce to front" << endl;
-        packetQueue.push_front(pkt);
-        return;
-    }
-
-    auto it = packetQueue.begin();
-    auto firstTag = (*it)->getTag<MessageInfoTag>();
-
-    // 3. If first packet is header -> insert at front
-    if (firstTag->isHeader()) {
-        EV << "First packet is header -> inserting NodeAnnounce at front" << endl;
-        packetQueue.push_front(pkt);
-        return;
-    }
-
-    // 4. First packet is not header -> find the next header
-    auto insertPos = packetQueue.end();
-    for (auto it2 = packetQueue.begin(); it2 != packetQueue.end(); ++it2) {
-        auto tag2 = (*it2)->getTag<MessageInfoTag>();
-        if (tag2->isHeader()) {
-            insertPos = it2;
-            break;
-        }
-    }
-
-    if (insertPos != packetQueue.end()) {
-        EV << "Inserting NodeAnnounce before next header" << endl;
-        packetQueue.insert(insertPos, pkt);
-    } else {
-        EV << "No header found -> pushing NodeAnnounce to back" << endl;
-        packetQueue.push_back(pkt);
-    }
-}
-
 Packet* CustomPacketQueue::dequeuePacket()
 {
     if (!packetQueue.empty()) {

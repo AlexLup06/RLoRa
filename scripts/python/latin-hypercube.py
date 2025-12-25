@@ -1,12 +1,10 @@
 import numpy as np
 import os
 
-
 BASE_DIR = os.getenv("rlora_root") or os.getcwd()
 
 # --- timeToNextMessage (TTNM) ---
 # Logarithmic spacing between 0.1 and 120 seconds
-
 min_val = 1
 max_val = 120
 N = 21
@@ -19,13 +17,11 @@ ttnm_values = np.unique(ttnm_values)
 ttnm_values = [0.1, 0.2, 0.4, 0.8] + ttnm_values.tolist()
 
 # --- numberOfNodes ---
-# Nonlinear spacing using a power curve (denser at low values)
 # Range: 10 to 100, 20 values
 num_values = 20
 min_nodes = 10
 max_nodes = 100
 
-# Power factor < 1 → compress near lower end
 power = 2
 
 normalized = np.linspace(0, 1, num_values)

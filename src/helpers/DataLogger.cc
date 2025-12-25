@@ -6,7 +6,6 @@
 namespace rlora
 {
 
-    // Initialisierung der statischen Instanz
     DataLogger *DataLogger::instance = nullptr;
 
     DataLogger::~DataLogger()
@@ -34,7 +33,6 @@ namespace rlora
         bytesReceivedIncludingCollisions = 0;
     }
 
-    // Singleton-Zugriff
     DataLogger *DataLogger::getInstance()
     {
         if (!instance)
@@ -46,7 +44,6 @@ namespace rlora
 
     void DataLogger::logCollision(int id1, int id2)
     {
-        // Immer in kanonischer Form speichern: kleinerer zuerst
         int minId = min(id1, id2);
         int maxId = max(id1, id2);
 
@@ -114,7 +111,6 @@ namespace rlora
         possibleCollisionSet.insert(oss.str());
     }
 
-    // In Datei schreiben
     void DataLogger::writeDataToFile(const string &filename)
     {
         ofstream out(filename);

@@ -134,7 +134,7 @@ namespace rlora
         auto it = latestIds_.find(sourceId);
         if (it == latestIds_.end())
         {
-            return false; // No messageId yet, so it's considered "larger"
+            return false; 
         }
         return newId == it->second;
     }
@@ -144,7 +144,7 @@ namespace rlora
         auto it = latestIds_.find(sourceId);
         if (it == latestIds_.end())
         {
-            return true; // No messageId yet, so it's considered "larger"
+            return true; 
         }
         return newId > it->second;
     }
@@ -154,7 +154,7 @@ namespace rlora
         auto it = latestIds_.find(sourceId);
         if (it == latestIds_.end())
         {
-            return false; // No messageId yet, so it's considered "larger"
+            return false; 
         }
         return newId < it->second;
     }

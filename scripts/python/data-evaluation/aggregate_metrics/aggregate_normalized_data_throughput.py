@@ -9,10 +9,9 @@ from typing import Dict, Iterable, List, Tuple
 
 try:
     from .data_paths import iter_matching_files
-except ImportError:  # pragma: no cover - fallback for direct execution
+except ImportError:  
     from data_paths import iter_matching_files
 
-# Root directories (fall back to CWD if env var is not set)
 BASE_DIR = os.getenv("rlora_root") or os.getcwd()
 DATA_DIR = os.path.join(BASE_DIR, "data")
 OUTPUT_DIR = os.path.join(BASE_DIR, "data_aggregated")

@@ -20,7 +20,6 @@ def process_json_file(root, filename, modify_func):
         with open(filepath, "r") as f:
             data = json.load(f)
 
-        # Skip already-processed files
         if isinstance(data, dict) and set(data.keys()) == {"metadata", "results"}:
             print(f"⚠️ Skipping already-processed file: {filename}")
             return
@@ -28,12 +27,10 @@ def process_json_file(root, filename, modify_func):
         top_key = next(iter(data))
         experiment = data[top_key]
 
-        # If this shape doesn't match expected, bail early
         if not isinstance(experiment, dict):
             print(f"⚠️ Unexpected format, skipping: {filename}")
             return
 
-        # Clean metadata (remove quotes, drop unused)
         itervars = experiment.get("itervars", {})
         cleaned_itervars = {
             k: v.strip('"') if isinstance(v, str) else v for k, v in itervars.items()
@@ -42,22 +39,18 @@ def process_json_file(root, filename, modify_func):
         for key in ["attributes", "config"]:
             experiment.pop(key, None)
 
-        # Run custom handler
         modify_func(experiment)
 
-        # Final shape
         new_data = {
             "metadata": experiment.get("itervars", {}),
             "results": experiment.get("vectors", {}),
         }
 
-        # Determine output path and save format
         if SAVE_AS_MSGPACK:
             msgpack_path = filepath.replace(".json", ".msgpack")
             with open(msgpack_path, "wb") as f:
                 msgpack.dump(new_data, f, default=m.encode)
 
-            # Delete original JSON only if .msgpack exists and non-empty
             if os.path.exists(msgpack_path) and os.path.getsize(msgpack_path) > 0:
                 os.remove(filepath)
                 print(f"✅ Converted and deleted {filename}")
@@ -79,17 +72,14 @@ def modify_time_on_air(exp):
         exp["vectors"] = []
         return
 
-    # x_i values = sum of time-on-air per node
     times = [sum(vec["value"]) for vec in vectors]
 
-    # Compute Jain's Fairness Index
     s = sum(times)
     sq = sum(t * t for t in times)
     n = len(times)
 
     fairness = (s * s) / (n * sq) if sq > 0 else 1.0
 
-    # Overwrite with fairness index
     exp["vectors"] = fairness
 
 
@@ -282,7 +272,7 @@ def process_all_json(root_dir):
             for pattern, func in pattern_map.items():
                 if re.match(pattern, filename):
                     process_json_file(root, filename, func)
-                    break  # only process once per file
+                    break 
 
 if __name__ == "__main__":
     process_all_json(root_dir)

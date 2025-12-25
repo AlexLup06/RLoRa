@@ -14,7 +14,6 @@ namespace rlora
     private:
         static DataLogger *instance;
 
-        // Kollisionen als Strings im Format "id1,id2"
         set<string> collisionSet;
         set<string> possibleCollisionSet;
 
@@ -62,7 +61,6 @@ namespace rlora
         void logEffectiveBytesReceivedIncludingCollisions(int size); // ✅
         void logBytesReceivedIncludingCollisions(int size);          // ✅
 
-        // Am Ende schreiben
         void writeDataToFile(const std::string &filename = "data.txt");
     };
 

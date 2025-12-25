@@ -3,19 +3,16 @@
 OUTFILE1=start-1.sh
 OUTFILE2=start-2.sh
 
-# Remove if it exists
 > "$OUTFILE1"
 > "$OUTFILE2"
 
-# Range parameters
 STEP=500
-END=256000   # we stop at 153600
+END=256000 
 START=243200
 
 while [ $START -lt $END ]; do
     STOP=$((START + STEP - 1))
 
-    # make sure we don't go beyond END
     if [ $STOP -ge $END ]; then
         STOP=$((END - 1))
     fi
@@ -32,7 +29,6 @@ START=243200
 while [ $START -lt $END ]; do
     STOP=$((START + STEP - 1))
 
-    # make sure we don't go beyond END
     if [ $STOP -ge $END ]; then
         STOP=$((END - 1))
     fi
